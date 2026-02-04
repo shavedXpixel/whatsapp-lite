@@ -6,7 +6,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, db } from "./firebase"; 
 import { collection, query, where, getDocs, doc, onSnapshot } from "firebase/firestore"; // 🆕 Changed getDoc to onSnapshot
 
-const socket = io.connect("http://localhost:3001");
+const socket = io.connect("https://whatsapp-backend-xv12.onrender.com");
 const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets_sound_notification_bing.mp3");
 
 function App() {
