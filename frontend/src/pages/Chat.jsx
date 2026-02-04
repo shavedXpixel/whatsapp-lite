@@ -17,7 +17,7 @@ const MessageStatus = ({ status, isMyMessage }) => {
 function Chat({ userData, socket }) {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const isDirectMessage = roomId.includes("_"); // ✅ CHECK IF PRIVATE CHAT
+  const isDirectMessage = roomId.includes("_");
 
   const [currentMessage, setCurrentMessage] = useState("");
   const [messageList, setMessageList] = useState([]);
@@ -269,18 +269,16 @@ function Chat({ userData, socket }) {
   if (!userData) return <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-blue-400 font-bold animate-pulse">Loading Chat...</div>;
 
   return (
-    // ✅ SMART GRID FIX: 
-    // If it's a Private Chat (isDirectMessage), use 1 column (Full Width).
-    // If it's a Group Chat (!isDirectMessage), use 2 columns (Sidebar + Chat).
+    // ✅ GRID: h-[100dvh] forces viewport height
     <div className={`w-full h-[100dvh] bg-[#0b0f19] grid grid-cols-1 ${!isDirectMessage ? 'md:grid-cols-[350px_1fr]' : ''} overflow-hidden font-sans`}>
       
       {/* 🔮 BACKGROUND */}
       <div className="fixed top-[-20%] left-[-10%] w-[600px] h-[600px] bg-violet-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-blob pointer-events-none"></div>
       <div className="fixed bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-blob animation-delay-4000 pointer-events-none"></div>
 
-      {/* 🛑 SIDEBAR (Only for Group Chats) */}
+      {/* 🛑 SIDEBAR */}
       {!isDirectMessage && (
-        <div className="hidden md:flex flex-col h-full bg-black/20 backdrop-blur-xl border-r border-white/5 z-20">
+        <div className="hidden md:flex flex-col h-full bg-black/20 backdrop-blur-xl border-r border-white/5 z-20 overflow-hidden">
            <div className="p-6 border-b border-white/5 bg-white/5 backdrop-blur-md">
              <div className="flex items-center gap-4">
                <img src={userData.photoURL} className="w-12 h-12 rounded-full border-2 border-blue-500/50" />
@@ -305,8 +303,9 @@ function Chat({ userData, socket }) {
         </div>
       )}
 
-      {/* 💬 MAIN CHAT AREA (Fills Remaining Space) */}
-      <div className="h-full flex flex-col relative z-10 w-full">
+      {/* 💬 MAIN CHAT AREA */}
+      {/* ✅ ADDED overflow-hidden here to prevent parent scrolling */}
+      <div className="h-full flex flex-col relative z-10 w-full overflow-hidden">
         
         {/* HEADER */}
         <div className="h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 z-30 shadow-sm shrink-0">
@@ -326,8 +325,8 @@ function Chat({ userData, socket }) {
              </div>
         </div>
 
-        {/* MESSAGES */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar bg-transparent">
+        {/* MESSAGES - ✅ ADDED min-h-0 to force scrollbar */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar bg-transparent min-h-0">
             {messageList.map((msg, index) => {
               const isMyMessage = userData.realName === msg.author;
               const isSystem = msg.author === "System";
