@@ -5,12 +5,12 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAGpgnVyvslUBgVk9woIL06r7DY6bcHKWQ",
-  authDomain: "whatsapp-lite-pro.firebaseapp.com",
-  projectId: "whatsapp-lite-pro",
-  storageBucket: "whatsapp-lite-pro.firebasestorage.app",
-  messagingSenderId: "356286951848",
-  appId: "1:356286951848:web:b0cc84aa009a8371cced9d"
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
