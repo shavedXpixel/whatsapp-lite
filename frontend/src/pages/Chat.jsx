@@ -269,8 +269,8 @@ function Chat({ userData, socket }) {
   if (!userData) return <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-blue-400 font-bold animate-pulse">Loading Chat...</div>;
 
   return (
-    // ✅ FIX 1: h-[100dvh] forces it to fit the screen exactly (ignoring browser bars)
-    <div className="w-full h-[100dvh] bg-[#0b0f19] flex relative overflow-hidden font-sans">
+    // ✅ CONTAINER: Force 100vh no matter what
+    <div className="w-full h-screen bg-[#0b0f19] flex relative overflow-hidden font-sans">
       
       {/* 🔮 BACKGROUND */}
       <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-violet-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-blob pointer-events-none"></div>
@@ -324,8 +324,8 @@ function Chat({ userData, socket }) {
              </div>
         </div>
 
-        {/* MESSAGES (Grows to fill space) */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar bg-transparent">
+        {/* MESSAGES - Added padding-bottom to prevent overlap */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 pb-24 custom-scrollbar bg-transparent">
             {messageList.map((msg, index) => {
               const isMyMessage = userData.realName === msg.author;
               const isSystem = msg.author === "System";
@@ -366,8 +366,8 @@ function Chat({ userData, socket }) {
             <div ref={bottomRef} />
         </div>
 
-        {/* 🛠️ INPUT AREA (FIXED: Sticky at bottom, No padding below) */}
-        <div className="w-full bg-black/40 backdrop-blur-xl border-t border-white/5 p-3 flex items-center gap-2 z-30 shrink-0">
+        {/* 🛠️ INPUT AREA - ABSOLUTE POSITIONED (Bulletproof Fix) */}
+        <div className="absolute bottom-0 left-0 w-full bg-black/60 backdrop-blur-2xl border-t border-white/10 p-3 flex items-center gap-2 z-50">
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={selectFile} />
             
             {showEmoji && <div className="absolute bottom-20 left-4 z-50 animate-fade-in-up shadow-2xl rounded-2xl overflow-hidden"><EmojiPicker onEmojiClick={(e)=>setCurrentMessage(prev=>prev+e.emoji)} theme="dark" height={350} searchDisabled skinTonesDisabled/></div>}
