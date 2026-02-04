@@ -1,19 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import EmojiPicker from "emoji-picker-react";
-import { storage } from "../firebase";
+import { storage, db } from "../firebase"; // 👈 IMPORT DB
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore"; // 👈 FIRESTORE IMPORTS
 
-// ✅ 1. TICK COMPONENT (Now handles old messages too)
+// ✅ TICK COMPONENT
 const MessageStatus = ({ status, isMyMessage }) => {
-  if (!isMyMessage) return null; // Only show ticks on MY messages
-  
-  // Status Icons
+  if (!isMyMessage) return null;
   if (status === "sent") return <span className="text-gray-500 text-[10px] ml-1">✓</span>;
   if (status === "delivered") return <span className="text-gray-500 text-[10px] ml-1">✓✓</span>;
   if (status === "read") return <span className="text-blue-500 text-[10px] ml-1">✓✓</span>;
-  
-  // Fallback for old messages
   return <span className="text-gray-500 text-[10px] ml-1">✓</span>; 
 };
 
@@ -59,21 +56,16 @@ function Chat({ userData, socket }) {
   useEffect(() => {
     const handleReceiveMessage = (data) => {
       setMessageList((list) => {
-        // ✅ If I receive a message, tell the sender it is DELIVERED
         if (data.author !== userData.realName) {
-            console.log("Marking delivered:", data.id);
             socket.emit("message_status_update", { room: roomId, messageId: data.id, status: "delivered" });
         }
-
         const newList = [...list, data];
         localStorage.setItem(`chat_${roomId}`, JSON.stringify(newList)); 
         return newList;
       });
     };
 
-    // ✅ HANDLE STATUS UPDATE (Grey -> Blue)
     const handleStatusUpdate = (data) => {
-        console.log("Status Update Received:", data);
         setMessageList((list) => {
             const newList = list.map((msg) => {
                 if (msg.id === data.messageId) {
@@ -110,35 +102,86 @@ function Chat({ userData, socket }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messageList, typingUser, uploading, isRecording]);
 
-  // 4. INTELLIGENT "MARK AS READ" TRIGGER
+  // 4. MARK READ
   useEffect(() => {
     const markRead = () => {
         if (document.visibilityState === 'visible') {
             messageList.forEach(msg => {
-                // Only mark as read if it's NOT mine and NOT already read
                 if (msg.author !== userData.realName && msg.status !== "read") {
                     socket.emit("message_status_update", { room: roomId, messageId: msg.id, status: "read" });
                 }
             });
         }
     };
-
     markRead();
     window.addEventListener("focus", markRead);
-    window.addEventListener("click", markRead); // Also check on click
-
-    return () => {
-        window.removeEventListener("focus", markRead);
-        window.removeEventListener("click", markRead);
-    };
+    return () => window.removeEventListener("focus", markRead);
   }, [messageList, roomId, userData, socket]);
 
 
-  // --- MESSAGING FUNCTIONS ---
+  // 🆕 HELPER: UPDATE RECENT CHATS LIST IN DATABASE
+  const updateRecentChats = async (msgType, msgContent) => {
+    // Only works for Private Chats (A_B)
+    if (!isDirectMessage) return;
+
+    // 1. Figure out who the OTHER person is
+    const ids = roomId.split("_");
+    const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
+
+    const lastMessageText = msgType === "text" ? msgContent : `📷 Sent a ${msgType}`;
+
+    try {
+        // A. Update MY list
+        const myChatRef = doc(db, "userChats", userData.uid);
+        const myChatSnap = await getDoc(myChatRef);
+
+        // Fetch OTHER user's details if we don't have them yet
+        if (!myChatSnap.exists() || !myChatSnap.data()[roomId]) {
+            const otherUserSnap = await getDoc(doc(db, "users", otherUid));
+            const otherUserData = otherUserSnap.exists() ? otherUserSnap.data() : { realName: "User", photoURL: "" };
+            
+            await setDoc(myChatRef, {
+                [roomId]: {
+                    userInfo: { uid: otherUid, displayName: otherUserData.realName, photoURL: otherUserData.photoURL },
+                    lastMessage: lastMessageText,
+                    date: serverTimestamp()
+                }
+            }, { merge: true });
+        } else {
+             // Just update message
+             await updateDoc(myChatRef, {
+                [`${roomId}.lastMessage`]: lastMessageText,
+                [`${roomId}.date`]: serverTimestamp()
+            });
+        }
+
+        // B. Update THEIR list (So I appear on their screen)
+        const theirChatRef = doc(db, "userChats", otherUid);
+        const theirChatSnap = await getDoc(theirChatRef);
+        
+        if (!theirChatSnap.exists() || !theirChatSnap.data()[roomId]) {
+             await setDoc(theirChatRef, {
+                [roomId]: {
+                    userInfo: { uid: userData.uid, displayName: userData.realName, photoURL: userData.photoURL },
+                    lastMessage: lastMessageText,
+                    date: serverTimestamp()
+                }
+            }, { merge: true });
+        } else {
+             await updateDoc(theirChatRef, {
+                [`${roomId}.lastMessage`]: lastMessageText,
+                [`${roomId}.date`]: serverTimestamp()
+            });
+        }
+    } catch (err) {
+        console.error("Error updating chat list:", err);
+    }
+  };
+
 
   const sendMessage = async () => {
     if (currentMessage !== "") {
-      const msgId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`; // ✅ Simple ID Generator
+      const msgId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const messageData = {
         id: msgId,
         room: roomId,
@@ -152,6 +195,9 @@ function Chat({ userData, socket }) {
       
       await socket.emit("send_message", messageData);
       
+      // 🆕 Update Database
+      updateRecentChats("text", currentMessage);
+
       setMessageList((list) => {
           const newList = [...list, messageData];
           localStorage.setItem(`chat_${roomId}`, JSON.stringify(newList));
@@ -182,6 +228,10 @@ function Chat({ userData, socket }) {
             status: "sent"
         };
         await socket.emit("send_message", messageData);
+        
+        // 🆕 Update Database
+        updateRecentChats(type, url);
+
         setMessageList((list) => {
             const newList = [...list, messageData];
             localStorage.setItem(`chat_${roomId}`, JSON.stringify(newList));
@@ -266,7 +316,6 @@ function Chat({ userData, socket }) {
                     {typingUser && <p className="text-xs text-green-400 animate-pulse">{typingUser} typing...</p>}
                 </div>
             </div>
-             {/* 🗑️ Clear Button to fix missing ticks on old messages */}
              <button onClick={() => { localStorage.removeItem(`chat_${roomId}`); setMessageList([]); }} className="text-gray-400 text-xs">Clear Chat</button>
              {isDirectMessage && <button onClick={() => navigate("/")} className="text-red-400 text-xs ml-4 border border-red-500 p-1 rounded">Exit</button>}
         </div>
@@ -287,7 +336,6 @@ function Chat({ userData, socket }) {
                         
                         <div className={`flex justify-end items-center mt-1 absolute bottom-1 right-2`}>
                             <p className={`text-[9px] mr-1 ${isMyMessage ? "text-green-200" : "text-gray-400"}`}>{msg.time}</p>
-                            {/* ✅ CALLING THE TICK COMPONENT */}
                             <MessageStatus status={msg.status} isMyMessage={isMyMessage} />
                         </div>
                     </div>
