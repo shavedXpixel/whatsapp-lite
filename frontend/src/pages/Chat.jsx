@@ -30,7 +30,7 @@ const MessageStatus = ({ status, isMyMessage }) => {
   return <span className="text-white/40 text-[10px] ml-1">✓</span>; 
 };
 
-// ✨ NEW: ANIMATED TYPING BUBBLES COMPONENT
+// ✨ ANIMATED TYPING BUBBLES
 const TypingIndicator = () => (
   <div className="flex items-center gap-1 bg-white/5 p-3 rounded-2xl rounded-tl-none w-fit mb-4 border border-white/5 animate-fade-in-up">
     <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
@@ -224,7 +224,7 @@ function Chat({ userData, socket }) {
       <div className="fixed top-[-20%] left-[-10%] w-[600px] h-[600px] bg-violet-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-blob pointer-events-none"></div>
       <div className="fixed bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-blob animation-delay-4000 pointer-events-none"></div>
 
-      {/* 🛑 SIDEBAR */}
+      {/* 🛑 SIDEBAR (Hidden in Private Chat) */}
       {!isDirectMessage && (
         <div className="hidden md:flex flex-col h-full bg-black/20 backdrop-blur-xl border-r border-white/5 z-20 overflow-hidden">
            <div className="p-6 border-b border-white/5 bg-white/5 backdrop-blur-md">
@@ -254,10 +254,14 @@ function Chat({ userData, socket }) {
       {/* 💬 MAIN CHAT AREA */}
       <div className="h-full flex flex-col relative z-10 w-full overflow-hidden">
         
-        {/* HEADER */}
+        {/* HEADER - Updated Back Button Logic */}
         <div className="h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 z-30 shadow-sm shrink-0">
             <div className="flex items-center gap-4">
-                <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white transition md:hidden p-2">←</button>
+                {/* ✅ FIX: The back button is now visible if it's a Direct Message (no sidebar) OR if we are on mobile.
+                   It is only hidden if it's a Group Chat on Desktop (since the sidebar is there).
+                */}
+                <button onClick={() => navigate("/")} className={`text-gray-400 hover:text-white transition p-2 ${!isDirectMessage ? 'md:hidden' : ''}`}>←</button>
+                
                 <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/20">
                     {isDirectMessage ? "👤" : "#"}
                 </div>
@@ -268,6 +272,12 @@ function Chat({ userData, socket }) {
             </div>
              
              <div className="flex items-center gap-3">
+                 {/* ✅ NEW DASHBOARD BUTTON for Private Chats */}
+                 {isDirectMessage && (
+                    <button onClick={() => navigate("/")} className="text-gray-300 hover:text-white text-xs px-3 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition bg-blue-900/20">
+                        Dashboard
+                    </button>
+                 )}
                  <button onClick={() => { localStorage.removeItem(`chat_${roomId}`); setMessageList([]); }} className="text-gray-400 hover:text-white text-xs px-3 py-2 rounded-lg border border-white/10 hover:bg-white/5 transition bg-black/20">Clear</button>
              </div>
         </div>
@@ -283,7 +293,7 @@ function Chat({ userData, socket }) {
               const showDate = msgDate && msgDate !== lastDate;
               if (msgDate) lastDate = msgDate;
 
-              // 🛑 SYSTEM MESSAGE (MINIMAL)
+              // 🛑 SYSTEM MESSAGE
               if (isSystem) {
                   return (
                     <div key={index} className="flex justify-center my-2">
