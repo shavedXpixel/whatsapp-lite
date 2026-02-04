@@ -3,9 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { socket } from "./socket"; // 🆕 Import Shared Socket
+import { socket } from "./socket"; 
 
-import { Auth } from "./pages/Auth";
+// 🆕 IMPORT NEW PAGES
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 
@@ -23,7 +25,6 @@ function App() {
              setUserData(docSnap.data());
              setLoading(false);
           } else {
-             // Fallback for missing DB profile
              setUserData({
                 realName: currentUser.displayName || "User",
                 username: currentUser.email.split('@')[0],
@@ -48,15 +49,13 @@ function App() {
     <BrowserRouter>
       <div className="h-screen bg-gray-900 font-sans text-gray-100 overflow-hidden">
         <Routes>
-          {/* If not logged in, show Auth. If logged in, show Home */}
-          <Route path="/" element={
-            !user ? <Auth /> : <Home userData={userData} socket={socket} />
-          } />
-          
-          {/* Chat Route: If accessed directly but not logged in, go back to / */}
-          <Route path="/chat/:roomId" element={
-            !user ? <Navigate to="/" /> : <Chat userData={userData} socket={socket} />
-          } />
+          {/* 🆕 LOGIN & SIGNUP ROUTES */}
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+          <Route path="/signup" element={!user ? <Signup /> : <Navigate to="/" />} />
+
+          {/* PROTECTED ROUTES */}
+          <Route path="/" element={user ? <Home userData={userData} socket={socket} /> : <Navigate to="/login" />} />
+          <Route path="/chat/:roomId" element={user ? <Chat userData={userData} socket={socket} /> : <Navigate to="/login" />} />
         </Routes>
       </div>
     </BrowserRouter>
