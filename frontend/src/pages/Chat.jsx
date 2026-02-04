@@ -5,13 +5,13 @@ import { storage, db } from "../firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 
-// ✅ PREMIUM TICK COMPONENT
+// ✅ PREMIUM TICK COMPONENT (Blue/Cyan Theme)
 const MessageStatus = ({ status, isMyMessage }) => {
   if (!isMyMessage) return null;
-  if (status === "sent") return <span className="text-white/50 text-[10px] ml-1">✓</span>;
-  if (status === "delivered") return <span className="text-white/50 text-[10px] ml-1">✓✓</span>;
-  if (status === "read") return <span className="text-cyan-300 text-[10px] ml-1 drop-shadow-[0_0_2px_rgba(103,232,249,0.8)]">✓✓</span>;
-  return <span className="text-white/50 text-[10px] ml-1">✓</span>; 
+  if (status === "sent") return <span className="text-white/40 text-[10px] ml-1">✓</span>;
+  if (status === "delivered") return <span className="text-white/40 text-[10px] ml-1">✓✓</span>;
+  if (status === "read") return <span className="text-cyan-400 text-[10px] ml-1 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]">✓✓</span>;
+  return <span className="text-white/40 text-[10px] ml-1">✓</span>; 
 };
 
 function Chat({ userData, socket }) {
@@ -266,145 +266,149 @@ function Chat({ userData, socket }) {
     typingTimeoutRef.current = setTimeout(() => socket.emit("stop_typing", roomId), 2000);
   };
 
-  if (!userData) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-emerald-400 font-bold animate-pulse">Loading Chat...</div>;
+  if (!userData) return <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-blue-400 font-bold animate-pulse">Loading Chat...</div>;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] flex items-center justify-center font-sans relative overflow-hidden">
+    // ✨ FULL SCREEN CONTAINER (No Card)
+    <div className="w-full h-screen bg-[#0b0f19] flex relative overflow-hidden font-sans">
       
-      {/* 🌟 BACKGROUND GLOW */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-purple-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob"></div>
-      <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-emerald-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob animation-delay-2000"></div>
-      <div className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob animation-delay-4000"></div>
+      {/* 🔮 AMBIENT BACKGROUND EFFECTS (Blue/Violet/Pink) */}
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-violet-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-blob pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600 rounded-full mix-blend-screen filter blur-[150px] opacity-20 animate-blob animation-delay-4000 pointer-events-none"></div>
+      <div className="absolute top-[40%] left-[40%] w-[400px] h-[400px] bg-cyan-600 rounded-full mix-blend-screen filter blur-[150px] opacity-10 animate-blob animation-delay-2000 pointer-events-none"></div>
 
-      {/* 📦 GLASS CONTAINER */}
-      <div className="w-full max-w-6xl h-[92vh] bg-gray-900/60 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl flex overflow-hidden z-10 animate-fade-in-up">
+      {/* 🛑 SIDEBAR (Group Info / Active Users) - GLASS EFFECT */}
+      {!isDirectMessage && (
+        <div className="w-[350px] h-full bg-black/20 backdrop-blur-xl border-r border-white/5 hidden md:flex flex-col z-20">
+           <div className="p-6 border-b border-white/5 bg-white/5 backdrop-blur-md">
+             <div className="flex items-center gap-4">
+               <img src={userData.photoURL} className="w-12 h-12 rounded-full border-2 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+               <div>
+                 <p className="font-bold text-gray-100 text-lg">{userData.realName}</p>
+                 <p className="text-blue-400 text-xs tracking-wider font-bold">ONLINE</p>
+               </div>
+             </div>
+             <button onClick={() => navigate("/")} className="mt-6 w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-gray-300 transition flex items-center justify-center gap-2 group border border-white/5">
+                 <span className="group-hover:-translate-x-1 transition-transform">←</span> Return to Dashboard
+             </button>
+          </div>
+          
+          <div className="p-5 pb-2"><h3 className="text-blue-400 text-xs font-bold uppercase tracking-widest">Active Users</h3></div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+              {userList.map((u, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-transparent hover:border-blue-500/30 hover:bg-white/10 transition-all cursor-default group">
+                      <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-full flex items-center justify-center font-bold text-white shadow-lg group-hover:scale-110 transition-transform">{u.charAt(0)}</div>
+                      <p className="text-gray-200 text-sm font-medium">{u}</p>
+                  </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 MAIN CHAT AREA (Full Height) */}
+      <div className="flex-1 h-full flex flex-col relative z-10">
         
-        {/* 🛑 SIDEBAR (Group Info / Active Users) */}
-        {!isDirectMessage && (
-          <div className="w-1/3 bg-black/20 border-r border-white/5 hidden md:flex flex-col backdrop-blur-sm">
-             <div className="p-5 border-b border-white/5 bg-white/5">
-               <div className="flex items-center gap-3">
-                 <img src={userData.photoURL} className="w-10 h-10 rounded-full border border-emerald-500 shadow-lg shadow-emerald-500/20" />
-                 <span className="font-bold text-gray-200 text-sm">{userData.realName}</span>
-               </div>
-               <button onClick={() => navigate("/")} className="mt-4 text-xs text-gray-400 hover:text-red-400 transition flex items-center gap-1 group">
-                   <span className="group-hover:-translate-x-1 transition-transform">←</span> Back to Dashboard
-               </button>
+        {/* HEADER - GLASS BAR */}
+        <div className="h-20 bg-black/20 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 z-30 shadow-sm">
+            <div className="flex items-center gap-4">
+                <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white transition md:hidden p-2 rounded-full hover:bg-white/10">←</button>
+                
+                <div className="w-11 h-11 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/20">
+                    {isDirectMessage ? "👤" : "#"}
+                </div>
+                <div>
+                    <h2 className="font-bold text-white text-lg tracking-wide">{isDirectMessage ? "Private Chat" : `Room: ${roomId}`}</h2>
+                    {typingUser ? (
+                        <p className="text-xs text-blue-400 animate-pulse font-medium tracking-wide">Typing...</p>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
+                            <p className="text-[10px] text-blue-300/60 font-medium tracking-widest uppercase">Live Connection</p>
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="p-4"><h3 className="text-emerald-400 text-xs font-bold uppercase tracking-widest">Active Users</h3></div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                {userList.map((u, idx) => (
-                    <div key={idx} className="flex items-center gap-3 p-3 mb-2 rounded-xl bg-white/5 border border-transparent hover:border-emerald-500/30 hover:bg-white/10 transition-all">
-                        <div className="w-8 h-8 bg-gradient-to-tr from-gray-700 to-gray-600 rounded-full flex items-center justify-center font-bold text-white shadow-inner">{u.charAt(0)}</div>
-                        <p className="text-gray-200 text-sm font-medium">{u}</p>
+             
+             <div className="flex items-center gap-3">
+                 <button onClick={() => { localStorage.removeItem(`chat_${roomId}`); setMessageList([]); }} className="text-gray-400 hover:text-white text-xs px-4 py-2 rounded-lg border border-white/10 hover:bg-white/5 transition bg-black/20">Clear History</button>
+                 {isDirectMessage && <button onClick={() => navigate("/")} className="text-red-400 hover:text-red-300 text-xs px-4 py-2 rounded-lg border border-red-500/20 hover:bg-red-500/10 transition bg-red-900/10">Close Chat</button>}
+             </div>
+        </div>
+
+        {/* MESSAGES LIST AREA */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar">
+            {messageList.map((msg, index) => {
+              const isMyMessage = userData.realName === msg.author;
+              return (
+                <div key={index} className={`flex w-full animate-fade-in-up group ${isMyMessage ? "justify-end" : "justify-start"}`}>
+                    {!isMyMessage && <img src={msg.photo} className="w-9 h-9 rounded-full mr-3 self-end mb-1 border border-white/10 shadow-lg"/>}
+                    
+                    <div className={`max-w-[85%] md:max-w-[60%] min-w-[120px] px-5 py-3 rounded-2xl text-[15px] shadow-2xl backdrop-blur-md relative border transition-transform hover:scale-[1.01]
+                        ${isMyMessage 
+                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-none border-blue-400/20" 
+                            : "bg-white/5 text-gray-200 rounded-bl-none border-white/10 hover:bg-white/10"
+                        }`}>
+                        
+                        {!isMyMessage && <p className="text-[10px] font-bold text-blue-400 mb-1.5 tracking-wide uppercase opacity-80">{msg.author}</p>}
+                        
+                        {msg.type === "image" ? <img src={msg.message} className="max-w-full rounded-xl mb-1 border border-black/20 shadow-lg" /> :
+                         msg.type === "video" ? <video src={msg.message} controls className="max-w-full rounded-xl mb-1 border border-black/20 shadow-lg" /> :
+                         msg.type === "audio" ? <audio src={msg.message} controls className="max-w-[240px] mt-1" /> :
+                         <p className="break-words leading-relaxed font-light tracking-wide">{msg.message}</p>}
+                        
+                        <div className={`flex justify-end items-center mt-1.5 gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity`}>
+                            <p className="text-[9px] font-mono tracking-tighter">{msg.time}</p>
+                            <MessageStatus status={msg.status} isMyMessage={isMyMessage} />
+                        </div>
                     </div>
-                ))}
+                </div>
+              );
+            })}
+            
+            {uploading && <div className="text-right text-blue-400 text-xs animate-pulse font-mono tracking-widest mr-4">UPLOADING...</div>}
+            {isRecording && <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-red-500/10 border border-red-500/50 text-red-400 px-6 py-2 rounded-full text-sm font-bold animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.3)] backdrop-blur-md">🔴 REC</div>}
+            
+            <div ref={bottomRef} />
+        </div>
+
+        <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={selectFile} />
+        
+        {/* INPUT AREA (Floating Glass Bar) */}
+        <div className="p-5 md:px-8 md:pb-8 bg-gradient-to-t from-[#0b0f19] to-transparent z-30">
+            {showEmoji && <div className="absolute bottom-28 left-8 z-50 animate-fade-in-up shadow-2xl rounded-2xl overflow-hidden"><EmojiPicker onEmojiClick={(e)=>setCurrentMessage(prev=>prev+e.emoji)} theme="dark" height={350} searchDisabled skinTonesDisabled/></div>}
+
+            <div className="flex gap-3 items-center bg-white/5 p-2 pr-2 rounded-full border border-white/10 focus-within:border-blue-500/50 focus-within:bg-black/40 focus-within:shadow-[0_0_20px_rgba(59,130,246,0.1)] transition-all backdrop-blur-xl">
+                <button onClick={() => setShowEmoji(!showEmoji)} className="text-xl text-gray-400 p-3 hover:text-yellow-400 hover:bg-white/5 rounded-full transition">😊</button>
+                <button onClick={() => fileInputRef.current.click()} className="text-xl text-gray-400 p-3 hover:text-cyan-400 hover:bg-white/5 rounded-full transition">📎</button>
+                
+                <input type="text" value={currentMessage} placeholder="Type a message..." 
+                    className="flex-1 p-2 bg-transparent text-white placeholder-gray-500 outline-none text-sm tracking-wide"
+                    onChange={handleTyping} onKeyPress={(e) => { e.key === "Enter" && sendMessage(); }} />
+                
+                {currentMessage.trim() === "" ? (
+                   <button 
+                     onMouseDown={startRecording} onMouseUp={stopRecording} 
+                     onTouchStart={startRecording} onTouchEnd={stopRecording}
+                     className={`p-3.5 rounded-full text-white transition-all shadow-lg ${isRecording ? "bg-red-500 scale-110 shadow-red-500/50" : "bg-white/10 hover:bg-white/20 hover:text-red-400"}`}
+                   >🎤</button>
+                ) : (
+                   <button onClick={sendMessage} className="bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 p-3.5 rounded-full text-white shadow-lg shadow-blue-600/30 transition-all transform hover:scale-105 active:scale-95">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                        <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+                      </svg>
+                   </button>
+                )}
             </div>
-          </div>
-        )}
-
-        {/* 💬 MAIN CHAT AREA */}
-        <div className="flex-1 flex flex-col relative">
-          
-          {/* HEADER */}
-          <div className="bg-white/5 backdrop-blur-md p-4 flex items-center justify-between border-b border-white/5 shadow-sm z-20">
-              <div className="flex items-center gap-4">
-                  <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white transition md:hidden p-2 rounded-full hover:bg-white/10">←</button>
-                  
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20">
-                      {isDirectMessage ? "👤" : "#"}
-                  </div>
-                  <div>
-                      <p className="font-bold text-white tracking-wide">{isDirectMessage ? "Private Chat" : `Room: ${roomId}`}</p>
-                      {typingUser ? (
-                          <p className="text-xs text-emerald-400 animate-pulse font-medium">{typingUser} is typing...</p>
-                      ) : (
-                          <p className="text-[10px] text-emerald-500/60 font-medium tracking-wider">ENCRYPTED CONNECTION</p>
-                      )}
-                  </div>
-              </div>
-               
-               <div className="flex items-center gap-2">
-                   <button onClick={() => { localStorage.removeItem(`chat_${roomId}`); setMessageList([]); }} className="text-gray-500 hover:text-white text-xs px-3 py-1 rounded border border-white/10 hover:bg-white/5 transition">Clear</button>
-                   {isDirectMessage && <button onClick={() => navigate("/")} className="text-red-400 hover:text-red-300 text-xs px-3 py-1 rounded border border-red-500/30 hover:bg-red-500/10 transition">Close</button>}
-               </div>
-          </div>
-
-          {/* MESSAGES LIST */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-transparent">
-              {messageList.map((msg, index) => {
-                const isMyMessage = userData.realName === msg.author;
-                return (
-                  <div key={index} className={`flex w-full animate-fade-in-up ${isMyMessage ? "justify-end" : "justify-start"}`}>
-                      {!isMyMessage && <img src={msg.photo} className="w-8 h-8 rounded-full mr-2 self-end mb-1 border border-white/10 shadow-sm"/>}
-                      
-                      <div className={`max-w-[85%] md:max-w-[65%] min-w-[120px] px-4 py-3 rounded-2xl text-sm shadow-xl backdrop-blur-sm relative border transition-all hover:scale-[1.01]
-                          ${isMyMessage 
-                              ? "bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-br-none border-emerald-400/20" 
-                              : "bg-white/10 text-gray-100 rounded-bl-none border-white/10"
-                          }`}>
-                          
-                          {!isMyMessage && <p className="text-[10px] font-bold text-emerald-400 mb-1 tracking-wide">{msg.author}</p>}
-                          
-                          {msg.type === "image" ? <img src={msg.message} className="max-w-full rounded-lg mb-1 border border-black/20" /> :
-                           msg.type === "video" ? <video src={msg.message} controls className="max-w-full rounded-lg mb-1 border border-black/20" /> :
-                           msg.type === "audio" ? <audio src={msg.message} controls className="max-w-[200px] mt-1 accent-emerald-500" /> :
-                           <p className="break-words text-[15px] leading-relaxed">{msg.message}</p>}
-                          
-                          <div className={`flex justify-end items-center mt-1 gap-1 opacity-70`}>
-                              <p className="text-[9px] font-mono">{msg.time}</p>
-                              <MessageStatus status={msg.status} isMyMessage={isMyMessage} />
-                          </div>
-                      </div>
-                  </div>
-                );
-              })}
-              
-              {uploading && <div className="text-right text-emerald-500 text-xs animate-pulse font-mono">Uploading file...</div>}
-              {isRecording && <div className="text-center bg-red-500/10 border border-red-500/30 text-red-400 p-2 rounded-lg text-xs font-bold animate-pulse mx-auto w-fit">🔴 Recording Audio...</div>}
-              
-              <div ref={bottomRef} />
-          </div>
-
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={selectFile} />
-          
-          {/* INPUT AREA */}
-          <div className="p-4 bg-black/20 backdrop-blur-md border-t border-white/5 relative z-20">
-              {showEmoji && <div className="absolute bottom-24 left-4 z-50 animate-fade-in-up"><EmojiPicker onEmojiClick={(e)=>setCurrentMessage(prev=>prev+e.emoji)} theme="dark" height={350} searchDisabled skinTonesDisabled/></div>}
-
-              <div className="flex gap-2 items-center bg-white/5 p-2 rounded-2xl border border-white/10 focus-within:border-emerald-500/50 focus-within:bg-white/10 transition-all shadow-lg">
-                  <button onClick={() => setShowEmoji(!showEmoji)} className="text-xl text-gray-400 p-2 hover:text-yellow-400 hover:bg-white/5 rounded-full transition">😊</button>
-                  <button onClick={() => fileInputRef.current.click()} className="text-xl text-gray-400 p-2 hover:text-blue-400 hover:bg-white/5 rounded-full transition">📎</button>
-                  
-                  <input type="text" value={currentMessage} placeholder="Type a message..." 
-                      className="flex-1 p-2 bg-transparent text-white placeholder-gray-500 outline-none text-sm"
-                      onChange={handleTyping} onKeyPress={(e) => { e.key === "Enter" && sendMessage(); }} />
-                  
-                  {currentMessage.trim() === "" ? (
-                     <button 
-                       onMouseDown={startRecording} onMouseUp={stopRecording} 
-                       onTouchStart={startRecording} onTouchEnd={stopRecording}
-                       className={`p-3 rounded-xl text-white transition-all shadow-lg ${isRecording ? "bg-red-500 scale-110 shadow-red-500/50" : "bg-gray-700 hover:bg-gray-600"}`}
-                     >🎤</button>
-                  ) : (
-                     <button onClick={sendMessage} className="bg-emerald-500 hover:bg-emerald-400 p-3 rounded-xl text-white shadow-lg shadow-emerald-500/30 transition-all transform hover:scale-105 active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                          <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-                        </svg>
-                     </button>
-                  )}
-              </div>
-          </div>
         </div>
       </div>
 
-      {/* GLOBAL STYLES FOR ANIMATIONS */}
+      {/* GLOBAL STYLES */}
       <style>{`
         @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(10px); }
+          from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out forwards; }
+        .animate-fade-in-up { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         
         @keyframes blob {
           0% { transform: translate(0px, 0px) scale(1); }
@@ -412,14 +416,14 @@ function Chat({ userData, socket }) {
           66% { transform: translate(-20px, 20px) scale(0.9); }
           100% { transform: translate(0px, 0px) scale(1); }
         }
-        .animate-blob { animation: blob 7s infinite; }
+        .animate-blob { animation: blob 10s infinite alternate; }
         .animation-delay-2000 { animation-delay: 2s; }
         .animation-delay-4000 { animation-delay: 4s; }
         
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { bg: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #10b981; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
       `}</style>
     </div>
   );
