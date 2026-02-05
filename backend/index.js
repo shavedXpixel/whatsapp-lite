@@ -39,7 +39,6 @@ function getUsersInRoom(room) {
 io.on("connection", (socket) => {
   console.log(`User Connected: ${socket.id}`);
 
-  // 1. SETUP PRIVATE CHANNEL
   socket.on("setup", (userData) => {
     socket.join(userData.uid); 
     console.log(`User ${userData.uid} joined their private channel`);
@@ -60,6 +59,28 @@ io.on("connection", (socket) => {
     io.to(room).emit("update_user_list", getUsersInRoom(room));
   });
 
+  // ✅ NEW: HANDLE EXPLICIT LEAVE (Navigation)
+  socket.on("leave_room", (room) => {
+      const user = userMap[socket.id];
+      if (user) {
+          // 1. Notify others
+          socket.to(room).emit("receive_message", {
+              author: "System",
+              message: `${user.username} has left the chat`,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+
+          // 2. Remove from userMap
+          delete userMap[socket.id];
+
+          // 3. Update the list for everyone else
+          io.to(room).emit("update_user_list", getUsersInRoom(room));
+          
+          // 4. Actually leave the socket channel
+          socket.leave(room);
+      }
+  });
+
   socket.on("typing", (data) => {
     socket.to(data.room).emit("display_typing", data.username);
   });
@@ -76,24 +97,20 @@ io.on("connection", (socket) => {
     socket.to(data.room).emit("message_status_updated", data);
   });
 
-  // 📞 CALLING EVENTS (FIXED: Passing callType) 📞
-  
-  // 1. Caller initiates call
+  // 📞 CALLING EVENTS
   socket.on("callUser", ({ userToCall, signalData, from, name, callType }) => {
-      // ✅ CRITICAL FIX: We are now passing 'callType' ('video' or 'audio') to the receiver
       io.to(userToCall).emit("callUser", { signal: signalData, from, name, callType });
   });
 
-  // 2. Receiver answers call
   socket.on("answerCall", (data) => {
       io.to(data.to).emit("callAccepted", data.signal);
   });
 
-  // 3. Either party ends call
   socket.on("endCall", ({ to }) => {
       io.to(to).emit("callEnded");
   });
 
+  // ❌ HANDLE TAB CLOSE / DISCONNECT
   socket.on("disconnect", () => {
     const user = userMap[socket.id];
     if (user) {
