@@ -73,6 +73,7 @@ function Chat({ userData, socket }) {
 
   const [currentMessage, setCurrentMessage] = useState("");
   const [messageList, setMessageList] = useState([]);
+  const [userList, setUserList] = useState([]); // ✅ This will now update correctly
   const [showEmoji, setShowEmoji] = useState(false);
   const [typingUser, setTypingUser] = useState("");
   
@@ -85,13 +86,28 @@ function Chat({ userData, socket }) {
   const bottomRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // 1. JOIN ROOM & SYNC MESSAGES FROM DATABASE
+  // 1. SOCKET & DATABASE LOGIC (MERGED TO FIX RACE CONDITION)
   useEffect(() => {
     if (userData && roomId) {
-       // A. Connect Socket for Typing Indicators
+       
+       // --- A. DEFINE SOCKET LISTENERS FIRST ---
+       const handleUserList = (users) => {
+           // console.log("Received User List:", users); // Debugging
+           setUserList(users);
+       };
+
+       const handleDisplayTyping = (user) => setTypingUser(user);
+       const handleHideTyping = () => setTypingUser("");
+
+       // --- B. ATTACH LISTENERS ---
+       socket.on("update_user_list", handleUserList);
+       socket.on("display_typing", handleDisplayTyping);
+       socket.on("hide_typing", handleHideTyping);
+
+       // --- C. JOIN ROOM (AFTER LISTENERS ARE READY) ---
        socket.emit("join_room", { room: roomId, username: userData.realName, photo: userData.photoURL });
 
-       // B. Fetch Other User Info (for Header)
+       // --- D. FETCH OTHER USER (HEADER INFO) ---
        if(isDirectMessage) {
           const ids = roomId.split("_");
           const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
@@ -100,62 +116,48 @@ function Chat({ userData, socket }) {
           });
        }
 
-       // C. REAL-TIME DATABASE LISTENER (Fixes "Message Not Received")
-       // We listen to: db -> chats -> {roomId} -> messages
+       // --- E. REAL-TIME MESSAGES (FIRESTORE) ---
        const messagesRef = collection(db, "chats", roomId, "messages");
        const q = query(messagesRef, orderBy("createdAt", "asc"));
 
-       const unsubscribe = onSnapshot(q, (snapshot) => {
+       const unsubscribeDb = onSnapshot(q, (snapshot) => {
            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
            setMessageList(msgs);
            
-           // If we are looking at the chat, mark it as read immediately
            if (msgs.length > 0 && isDirectMessage) {
                const lastMsg = msgs[msgs.length - 1];
                if (lastMsg.author !== userData.realName) {
                    const myChatRef = doc(db, "userChats", userData.uid);
                    updateDoc(myChatRef, { [`${roomId}.unread`]: false }).catch(()=>{});
-                   // Play sound if it's a new incoming message
                    notificationAudio.current.play().catch(()=>{}); 
                }
            }
        });
 
+       // --- F. CLEANUP ---
        return () => {
-          unsubscribe();
-          socket.emit("leave_room", roomId);
+          socket.off("update_user_list", handleUserList);
+          socket.off("display_typing", handleDisplayTyping);
+          socket.off("hide_typing", handleHideTyping);
+          unsubscribeDb();
+          socket.emit("leave_room", roomId); // Ensure we leave so list updates for others
        };
     }
-  }, [roomId, userData]); // Removed socket from dependency to prevent re-runs
+  }, [roomId, userData]); // Removed 'socket' dependency to prevent re-attaching constantly
 
-  // 2. SOCKET LISTENERS (For Typing Only Now)
-  useEffect(() => {
-    const handleDisplayTyping = (user) => setTypingUser(user);
-    const handleHideTyping = () => setTypingUser("");
-
-    socket.on("display_typing", handleDisplayTyping);
-    socket.on("hide_typing", handleHideTyping);
-
-    return () => {
-      socket.off("display_typing", handleDisplayTyping);
-      socket.off("hide_typing", handleHideTyping);
-    };
-  }, [socket]);
-
-  // 3. AUTO SCROLL
+  // 2. AUTO SCROLL
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messageList, typingUser, replyTo]);
 
 
-  // 4. UPDATE SIDEBAR LIST (NOTIFICATIONS)
+  // 3. UPDATE SIDEBAR LIST
   const updateRecentChats = async (msgContent) => {
     if (!isDirectMessage) return;
     const ids = roomId.split("_");
     const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
     
     try {
-        // Update MY Chat List
         const myChatRef = doc(db, "userChats", userData.uid);
         const myChatSnap = await getDoc(myChatRef);
         
@@ -173,8 +175,6 @@ function Chat({ userData, socket }) {
         }
         await setDoc(myChatRef, { [roomId]: chatData }, { merge: true });
 
-
-        // Update THEIR Chat List (This triggers the Notification Dot)
         const theirChatRef = doc(db, "userChats", otherUid);
         const theirChatSnap = await getDoc(theirChatRef);
         
@@ -182,7 +182,7 @@ function Chat({ userData, socket }) {
             userInfo: { uid: userData.uid, displayName: userData.realName, photoURL: userData.photoURL },
             lastMessage: msgContent,
             date: serverTimestamp(),
-            unread: true // 🔔 THIS IS KEY
+            unread: true 
         };
         await setDoc(theirChatRef, { [roomId]: theirChatData }, { merge: true });
 
@@ -199,18 +199,14 @@ function Chat({ userData, socket }) {
         message: currentMessage,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         fullDate: new Date().toISOString(),
-        createdAt: serverTimestamp(), // Database ordering
+        createdAt: serverTimestamp(), 
         status: "sent",
         replyTo: replyTo 
       };
       
-      // 1. SAVE TO DATABASE (The Fix)
       await addDoc(collection(db, "chats", roomId, "messages"), messageData);
-
-      // 2. Update Sidebar & Notifications
       updateRecentChats(currentMessage);
       
-      // 3. Reset UI
       setCurrentMessage("");
       setReplyTo(null);
       setShowEmoji(false);
@@ -250,7 +246,17 @@ function Chat({ userData, socket }) {
                  <span className="group-hover:-translate-x-1 transition-transform">←</span> Return to Dashboard
              </button>
           </div>
-          <div className="p-5 pb-2"><h3 className="text-blue-400 text-xs font-bold uppercase tracking-widest">Active Users</h3></div>
+          <div className="p-5 pb-2"><h3 className="text-blue-400 text-xs font-bold uppercase tracking-widest">Active Users ({userList.length})</h3></div>
+          
+          {/* ✅ USER LIST RENDER */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+              {userList.map((u, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-transparent hover:border-blue-500/30 hover:bg-white/10 transition-all cursor-default group">
+                      <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-full flex items-center justify-center font-bold text-white shadow-lg">{u.charAt(0)}</div>
+                      <p className="text-gray-200 text-sm font-medium">{u}</p>
+                  </div>
+              ))}
+          </div>
         </div>
       )}
 
@@ -290,7 +296,6 @@ function Chat({ userData, socket }) {
                         Dashboard
                     </button>
                  )}
-                 {/* No more "Clear" button needed as data is now persistent in cloud */}
              </div>
         </div>
 
