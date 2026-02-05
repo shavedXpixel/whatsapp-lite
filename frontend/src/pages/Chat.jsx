@@ -2,10 +2,34 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import EmojiPicker from "emoji-picker-react";
 import { db } from "../firebase";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 // 🎵 SOUND EFFECT
 const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3";
+
+// 🆔 PROFILE MODAL COMPONENT
+const ProfileModal = ({ user, onClose }) => {
+  if (!user) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div className="bg-[#1e293b] border border-white/10 p-6 rounded-3xl shadow-2xl max-w-sm w-full relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">✕</button>
+        
+        <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-br from-blue-500 to-purple-600 mb-4 shadow-lg shadow-purple-500/20">
+            <img src={user.photo || user.photoURL} className="w-full h-full rounded-full object-cover border-4 border-[#1e293b]" />
+        </div>
+        
+        <h2 className="text-2xl font-bold text-white">{user.name || user.displayName}</h2>
+        <p className="text-blue-400 text-xs font-mono mb-4 tracking-widest">USER INFO</p>
+        
+        <div className="w-full bg-black/20 rounded-xl p-4 text-center border border-white/5">
+            <p className="text-gray-400 text-xs uppercase font-bold mb-1">About</p>
+            <p className="text-gray-200 italic">"{user.about || "No status set."}"</p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const formatDate = (dateString) => {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -50,23 +74,35 @@ function Chat({ userData, socket }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const [typingUser, setTypingUser] = useState("");
   
+  // 🆕 NEW STATES FOR PROFILE VIEWING
+  const [otherUser, setOtherUser] = useState(null); 
+  const [showProfile, setShowProfile] = useState(false);
+
   const [replyTo, setReplyTo] = useState(null);
   const notificationAudio = useRef(new Audio(NOTIFICATION_SOUND));
   const bottomRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // 1. JOIN ROOM & CLEAR UNREAD STATUS
+  // 1. JOIN ROOM & FETCH OTHER USER INFO
   useEffect(() => {
     if (userData && roomId) {
        const joinRoom = async () => {
           socket.emit("join_room", { room: roomId, username: userData.realName, photo: userData.photoURL });
           
-          // ✅ CLEAR UNREAD STATUS ON ENTRY
           if(isDirectMessage) {
+              // Mark as Read
               const myChatRef = doc(db, "userChats", userData.uid);
+              try { await updateDoc(myChatRef, { [`${roomId}.unread`]: false }); } catch(e) {}
+
+              // 🔍 FETCH OTHER USER DATA (for the modal)
+              const ids = roomId.split("_");
+              const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
               try {
-                  await updateDoc(myChatRef, { [`${roomId}.unread`]: false });
-              } catch(e) { console.log("Error clearing unread:", e); }
+                  const userSnap = await getDoc(doc(db, "users", otherUid));
+                  if (userSnap.exists()) {
+                      setOtherUser(userSnap.data());
+                  }
+              } catch (e) { console.error("Could not fetch other user:", e); }
           }
        };
        joinRoom();
@@ -94,12 +130,9 @@ function Chat({ userData, socket }) {
         return newList;
       });
 
-      // ✅ IF I AM IN THE CHAT, KEEP IT READ
       if (isDirectMessage && data.author !== userData.realName) {
          const myChatRef = doc(db, "userChats", userData.uid);
-         try {
-             await updateDoc(myChatRef, { [`${roomId}.unread`]: false });
-         } catch(e) {}
+         try { await updateDoc(myChatRef, { [`${roomId}.unread`]: false }); } catch(e) {}
       }
     };
 
@@ -169,7 +202,7 @@ function Chat({ userData, socket }) {
              userInfo: { uid: otherUid },
              lastMessage: msgContent,
              date: serverTimestamp(),
-             unread: false // ✅ My list is always read (I sent it)
+             unread: false 
         };
 
         if (!myChatSnap.exists() || !myChatSnap.data()[roomId]) {
@@ -180,14 +213,13 @@ function Chat({ userData, socket }) {
 
         await setDoc(myChatRef, { [roomId]: chatData }, { merge: true });
 
-        // ✅ MARK AS UNREAD FOR THEM
         const theirChatRef = doc(db, "userChats", otherUid);
         const theirChatSnap = await getDoc(theirChatRef);
         const theirChatData = {
             userInfo: { uid: userData.uid, displayName: userData.realName, photoURL: userData.photoURL },
             lastMessage: msgContent,
             date: serverTimestamp(),
-            unread: true // 🔔 THIS TRIGGERS THEIR GLOW
+            unread: true 
         };
         await setDoc(theirChatRef, { [roomId]: theirChatData }, { merge: true });
 
@@ -273,16 +305,31 @@ function Chat({ userData, socket }) {
       {/* 💬 MAIN CHAT AREA */}
       <div className="h-full flex flex-col relative z-10 w-full overflow-hidden">
         
-        {/* HEADER */}
+        {/* HEADER - NOW CLICKABLE! */}
         <div className="h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 z-30 shadow-sm shrink-0">
             <div className="flex items-center gap-4">
                 <button onClick={() => navigate("/")} className={`text-gray-400 hover:text-white transition p-2 ${!isDirectMessage ? 'md:hidden' : ''}`}>←</button>
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/20">
-                    {isDirectMessage ? "👤" : "#"}
-                </div>
-                <div>
-                    <h2 className="font-bold text-white text-lg tracking-wide">{isDirectMessage ? "Private Chat" : `Room: ${roomId}`}</h2>
-                    <p className="text-xs text-gray-400 font-medium tracking-wide">Encrypted Connection</p>
+                
+                {/* 👤 CLICKABLE AVATAR/NAME */}
+                <div 
+                   className={`flex items-center gap-3 ${isDirectMessage ? "cursor-pointer hover:opacity-80 transition" : ""}`}
+                   onClick={() => isDirectMessage && setOtherUser(prev => ({...prev, name: prev?.realName, photo: prev?.photoURL})) || isDirectMessage && setShowProfile(true)}
+                >
+                    {isDirectMessage && otherUser ? (
+                        <img src={otherUser.photoURL} className="w-10 h-10 rounded-xl object-cover border border-white/10" />
+                    ) : (
+                        <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/20">
+                            {isDirectMessage ? "👤" : "#"}
+                        </div>
+                    )}
+                    
+                    <div>
+                        <h2 className="font-bold text-white text-lg tracking-wide">
+                            {isDirectMessage && otherUser ? otherUser.realName : (isDirectMessage ? "Private Chat" : `Room: ${roomId}`)}
+                        </h2>
+                        {typingUser ? <p className="text-xs text-blue-400 animate-pulse font-medium">Typing...</p> : 
+                         <p className="text-xs text-gray-400 font-medium tracking-wide">Encrypted Connection</p>}
+                    </div>
                 </div>
             </div>
              
@@ -325,7 +372,14 @@ function Chat({ userData, socket }) {
                     )}
 
                     <div className={`flex w-full animate-fade-in-up group mb-2 ${isMyMessage ? "justify-end" : "justify-start"}`}>
-                        {!isMyMessage && <img src={msg.photo} className="w-9 h-9 rounded-full mr-3 self-end mb-1 border border-white/10 shadow-lg"/>}
+                        {!isMyMessage && (
+                            // ✨ CLICK AVATAR TO VIEW PROFILE
+                            <img 
+                                src={msg.photo} 
+                                onClick={() => { setOtherUser({ name: msg.author, photo: msg.photo, about: "User in this chat." }); setShowProfile(true); }}
+                                className="w-9 h-9 rounded-full mr-3 self-end mb-1 border border-white/10 shadow-lg cursor-pointer hover:scale-110 transition"
+                            />
+                        )}
                         
                         <div className={`max-w-[85%] md:max-w-[60%] min-w-[120px] px-5 py-3 rounded-2xl text-[15px] shadow-2xl backdrop-blur-md relative border transition-transform
                             ${isMyMessage 
@@ -402,6 +456,9 @@ function Chat({ userData, socket }) {
                 </div>
             </div>
         </div>
+
+        {/* 🆔 PROFILE MODAL */}
+        {showProfile && <ProfileModal user={otherUser} onClose={() => setShowProfile(false)} />}
       </div>
 
       <style>{`
@@ -409,7 +466,12 @@ function Chat({ userData, socket }) {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
         .animate-fade-in-up { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-fade-in { animation: fade-in 0.2s ease-out forwards; }
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { bg: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
