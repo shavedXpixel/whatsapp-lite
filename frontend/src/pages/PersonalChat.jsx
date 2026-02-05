@@ -94,10 +94,8 @@ function PersonalChat({ userData, socket }) {
 
   useEffect(() => {
     if (userData && roomId) {
-       // 1. SETUP PRIVATE CHANNEL (Important!)
+       // 1. SETUP PRIVATE CHANNEL
        socket.emit("setup", userData);
-
-       // 2. JOIN CHAT ROOM
        socket.emit("join_room", { room: roomId, username: userData.realName });
 
        const ids = roomId.split("_");
@@ -123,8 +121,9 @@ function PersonalChat({ userData, socket }) {
        });
 
        // 📞 LISTEN FOR INCOMING CALLS
+       socket.off("callUser"); 
        socket.on("callUser", (data) => {
-           // 🛡️ EXTRA PROTECTION: Ignore call if I am the one who started it
+           // 🛡️ BLOCK SELF-CALLS
            if (data.from === userData.uid) return;
 
            setCallStatus("incoming");
@@ -133,11 +132,13 @@ function PersonalChat({ userData, socket }) {
            ringtoneAudio.current.play().catch(() => {});
        });
 
+       socket.off("callAccepted");
        socket.on("callAccepted", (signal) => {
            setCallStatus("connected");
            if(connectionRef.current) connectionRef.current.signal(signal);
        });
 
+       socket.off("callEnded");
        socket.on("callEnded", () => leaveCall());
 
        return () => { 
@@ -164,24 +165,23 @@ function PersonalChat({ userData, socket }) {
       });
 
       peer.on("signal", (data) => {
-          // 🎯 CALCULATE TARGET ID (Private Channel)
+          // Identify Other UID
           const ids = roomId.split("_");
           const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
 
           if(initiator) {
-              // CALLING: Send to specific user ID
+              // CALLING: Send to Specific User ID
               socket.emit("callUser", { 
-                  userToCall: otherUid, // <--- FIX: Sends to User, not Room
+                  userToCall: otherUid, 
                   signalData: data, 
                   from: userData.uid, 
                   name: userData.realName 
               });
           } else {
-              // ANSWERING: Send back to caller
-              socket.emit("answerCall", { signal: data, to: roomId }); 
-              // Note: For answering, 'to' needs to be the caller's ID. 
-              // Usually handled by 'callerSignal' context, but keeping it simple for now.
-              // If answering fails, change 'roomId' to the caller's UID here too.
+              // ANSWERING: Send back to Caller's ID
+              // (If we were passed 'callerId' we would use it, but for now we calculate it)
+              // Since otherUid is the OTHER person in this chat, it works.
+              socket.emit("answerCall", { signal: data, to: otherUid }); 
           }
       });
 
@@ -289,6 +289,7 @@ function PersonalChat({ userData, socket }) {
                 </div>
             </div>
             
+            {/* 📞 CALL BUTTON */}
             <button onClick={callUser} className="p-3 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>
             </button>

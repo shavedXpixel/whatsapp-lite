@@ -6,30 +6,9 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
-// 🆕 HEALTH CHECK ROUTE (The "Wake Up" Page)
+// 🆕 HEALTH CHECK ROUTE
 app.get("/", (req, res) => {
-  res.send(`
-    <html>
-      <head>
-        <title>WhatsApp Backend</title>
-        <style>
-          body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #0f172a; color: white; margin: 0; }
-          .container { text-align: center; padding: 2rem; border: 1px solid #334155; border-radius: 10px; background: #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-          .status { color: #4ade80; font-weight: bold; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 10px; }
-          .dot { width: 15px; height: 15px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 10px #4ade80; }
-          p { color: #94a3b8; margin-top: 10px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="status"><div class="dot"></div> Server is Running</div>
-          <h1>WhatsApp Lite Backend 🚀</h1>
-          <p>Socket.io is ready to accept connections.</p>
-          <p>Last checked: ${new Date().toLocaleString()}</p>
-        </div>
-      </body>
-    </html>
-  `);
+  res.send("WhatsApp Backend Running 🚀");
 });
 
 const server = http.createServer(app);
@@ -60,6 +39,14 @@ function getUsersInRoom(room) {
 io.on("connection", (socket) => {
   console.log(`User Connected: ${socket.id}`);
 
+  // ✅ 1. CRITICAL FIX: Setup Private User Channel
+  // This allows us to call a specific person by their UID
+  socket.on("setup", (userData) => {
+    socket.join(userData.uid); 
+    console.log(`User ${userData.uid} joined their private channel`);
+    socket.emit("connected");
+  });
+
   socket.on("join_room", (data) => {
     const { username, room } = data;
     socket.join(room);
@@ -86,27 +73,27 @@ io.on("connection", (socket) => {
     socket.to(data.room).emit("receive_message", data);
   });
 
-  // MESSAGE STATUS UPDATES (Blue Ticks)
   socket.on("message_status_update", (data) => {
     socket.to(data.room).emit("message_status_updated", data);
   });
 
-  // 📞 CALLING EVENTS (WebRTC Signaling) 📞
+  // 📞 CALLING EVENTS (Fixed for Private Calling) 📞
+  
   // 1. Caller initiates call
   socket.on("callUser", ({ userToCall, signalData, from, name }) => {
-      // userToCall is actually the 'roomId' in our app, so we broadcast to that room
-      socket.to(userToCall).emit("callUser", { signal: signalData, from, name });
+      // ✅ FIX: Use 'io.to' to send to the specific User ID channel
+      io.to(userToCall).emit("callUser", { signal: signalData, from, name });
   });
 
   // 2. Receiver answers call
   socket.on("answerCall", (data) => {
-      // data.to is the roomId
-      socket.to(data.to).emit("callAccepted", data.signal);
+      // ✅ FIX: Send answer back to the Caller's ID
+      io.to(data.to).emit("callAccepted", data.signal);
   });
 
   // 3. Either party ends call
   socket.on("endCall", ({ to }) => {
-      socket.to(to).emit("callEnded");
+      io.to(to).emit("callEnded");
   });
 
   socket.on("disconnect", () => {
