@@ -100,7 +100,10 @@ function PersonalChat({ userData, socket }) {
   const lastMessageIdRef = useRef(null);    
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef(null);
-  const prevMessageListLength = useRef(0); // Track length to avoid scrolling on status updates
+  const prevMessageListLength = useRef(0);
+  
+  // 🛑 INITIAL LOAD GUARD
+  const isInitialLoad = useRef(true); 
 
   useEffect(() => {
     if (userData && roomId) {
@@ -119,17 +122,30 @@ function PersonalChat({ userData, socket }) {
            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
            setMessageList(msgs);
            
+           // 🛑 BLOCK SOUND ON FIRST LOAD
+           if (isInitialLoad.current) {
+               if(msgs.length > 0) {
+                   lastMessageIdRef.current = msgs[msgs.length - 1].id;
+               }
+               isInitialLoad.current = false;
+               return; // STOP EXECUTION HERE
+           }
+
            if (msgs.length > 0) {
                const lastMsg = msgs[msgs.length - 1];
                
-               // 🎵 SOUND FIX: Strict check for NEW message ID
+               // 🎵 SOUND LOGIC: Only if ID is strictly NEW
                if (lastMsg.id !== lastMessageIdRef.current) {
                    lastMessageIdRef.current = lastMsg.id; 
                    
                    const isMyMessage = lastMsg.uid ? (lastMsg.uid === userData.uid) : (lastMsg.author === userData.realName);
                    if (!isMyMessage) {
                        updateDoc(doc(db, "userChats", userData.uid), { [`${roomId}.unread`]: false }).catch(()=>{});
-                       if(document.visibilityState === "hidden") notificationAudio.current.play().catch(()=>{}); 
+                       
+                       // Only play if tab is hidden to avoid annoying active user
+                       if(document.visibilityState === "hidden") {
+                           notificationAudio.current.play().catch(()=>{}); 
+                       }
                    }
                }
            }
@@ -167,10 +183,7 @@ function PersonalChat({ userData, socket }) {
     }
   }, [roomId, userData, otherUser]);
 
-  // 📜 THE "PEACEFUL SCROLL" LOGIC
-  // Only scroll down IF: 
-  // 1. It is the FIRST load (length was 0).
-  // 2. We received a NEW message (length increased) AND user was already near bottom.
+  // 📜 PEACEFUL SCROLLING (No Pull-Down)
   useLayoutEffect(() => {
       const container = scrollContainerRef.current;
       const currentLength = messageList.length;
@@ -185,9 +198,8 @@ function PersonalChat({ userData, socket }) {
               bottomRef.current?.scrollIntoView({ behavior: "smooth" });
           }
       }
-      
       prevMessageListLength.current = currentLength;
-  }, [messageList]); // Trigger on list update, but logic inside prevents forced scrolling
+  }, [messageList]);
 
   const forceAudioPlay = () => {
       if(userAudio.current) {
@@ -290,7 +302,7 @@ function PersonalChat({ userData, socket }) {
     setShowEmoji(false);
     socket.emit("stop_typing", roomId);
     
-    // ⬇️ ALWAYS SCROLL DOWN WHEN I SEND
+    // Always scroll down when I send
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
