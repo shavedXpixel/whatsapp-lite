@@ -5,12 +5,13 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { socket } from "./socket"; 
 
-// 🆕 IMPORT NEW PAGES
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Home from "./pages/Home";
-import Chat from "./pages/Chat";
-import Profile from "./pages/Profile"; // 👈 1. IMPORT PROFILE PAGE
+import Profile from "./pages/Profile";
+// 🆕 IMPORT NEW CHAT PAGES
+import GroupChat from "./pages/GroupChat";
+import PersonalChat from "./pages/PersonalChat";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -21,7 +22,6 @@ function App() {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Real-time listener for user data changes
         const unsubDb = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
           if (docSnap.exists()) {
              setUserData(docSnap.data());
@@ -51,15 +51,15 @@ function App() {
     <BrowserRouter>
       <div className="h-screen bg-gray-900 font-sans text-gray-100 overflow-hidden">
         <Routes>
-          {/* 🆕 LOGIN & SIGNUP ROUTES */}
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/signup" element={!user ? <Signup /> : <Navigate to="/" />} />
 
-          {/* PROTECTED ROUTES */}
           <Route path="/" element={user ? <Home userData={userData} socket={socket} /> : <Navigate to="/login" />} />
-          <Route path="/chat/:roomId" element={user ? <Chat userData={userData} socket={socket} /> : <Navigate to="/login" />} />
           
-          {/* ✅ 2. ADD PROFILE ROUTE */}
+          {/* ✅ SPLIT CHAT ROUTES */}
+          <Route path="/group/:roomId" element={user ? <GroupChat userData={userData} socket={socket} /> : <Navigate to="/login" />} />
+          <Route path="/dm/:roomId" element={user ? <PersonalChat userData={userData} socket={socket} /> : <Navigate to="/login" />} />
+          
           <Route path="/profile" element={user ? <Profile userData={userData} /> : <Navigate to="/login" />} />
         </Routes>
       </div>

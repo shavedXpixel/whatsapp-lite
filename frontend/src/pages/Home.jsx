@@ -35,7 +35,8 @@ function Home({ userData, socket }) {
   const joinRoom = () => {
     if (room !== "") {
       socket.emit("join_room", { room, username: userData.realName, photo: userData.photoURL });
-      navigate(`/chat/${room}`);
+      // ✅ NAVIGATE TO GROUP PAGE
+      navigate(`/group/${room}`);
     }
   };
 
@@ -57,11 +58,12 @@ function Home({ userData, socket }) {
       const theirUid = searchResult.uid;
       const roomID = myUid < theirUid ? `${myUid}_${theirUid}` : `${theirUid}_${myUid}`;
       socket.emit("join_room", { room: roomID, username: userData.realName, photo: userData.photoURL });
-      navigate(`/chat/${roomID}`);
+      // ✅ NAVIGATE TO DM PAGE
+      navigate(`/dm/${roomID}`);
     }
   };
 
-  // ✅ CLEAR UNREAD STATUS ON CLICK
+  // ✅ CLEAR UNREAD STATUS & NAVIGATE CORRECTLY
   const openRecentChat = async (chat) => {
       // 1. Mark as Read in Database
       const chatRef = doc(db, "userChats", userData.uid);
@@ -69,9 +71,15 @@ function Home({ userData, socket }) {
           await updateDoc(chatRef, { [`${chat.roomId}.unread`]: false });
       } catch (e) { console.log("Error marking read:", e); }
 
-      // 2. Navigate
+      // 2. Join Socket
       socket.emit("join_room", { room: chat.roomId, username: userData.realName, photo: userData.photoURL });
-      navigate(`/chat/${chat.roomId}`);
+
+      // 3. ✅ NAVIGATE BASED ON ID TYPE
+      if (chat.roomId.includes("_")) {
+          navigate(`/dm/${chat.roomId}`);
+      } else {
+          navigate(`/group/${chat.roomId}`);
+      }
   };
 
   return (
@@ -89,11 +97,9 @@ function Home({ userData, socket }) {
             
             {/* Header with Profile Link */}
             <div className="p-6 flex justify-between items-center border-b border-white/5 bg-white/5 backdrop-blur-sm">
-                {/* ✅ CLICKABLE PROFILE AREA */}
                 <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate("/profile")}>
                     <div className="relative">
                         <img src={userData.photoURL} className="w-12 h-12 rounded-full border-2 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] object-cover group-hover:scale-105 transition-transform" />
-                        {/* Settings Overlay */}
                         <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <span className="text-xs">⚙️</span>
                         </div>
@@ -137,7 +143,6 @@ function Home({ userData, socket }) {
                             </div>
                             <div className="flex justify-between items-center">
                                 <p className={`text-xs truncate ${chat.unread ? 'text-emerald-300 font-medium' : 'text-gray-400'}`}>{chat.lastMessage}</p>
-                                {/* 🔔 NEW MESSAGE INDICATOR */}
                                 {chat.unread && <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></div>}
                             </div>
                         </div>
