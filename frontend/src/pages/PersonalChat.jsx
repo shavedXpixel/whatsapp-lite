@@ -13,24 +13,33 @@ const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2354/235
 const RINGTONE_SOUND = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
 
 // 📞 CALL MODAL
-const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, onForceAudio }) => {
+const CallModal = ({ callStatus, otherUser, incomingCaller, onAnswer, onReject, onEnd, onForceAudio }) => {
     if (callStatus === "idle") return null;
+
+    // 🎯 LOGIC: If incoming, show the Caller. If calling, show the person we are chatting with.
+    const displayUser = callStatus === "incoming" ? incomingCaller : otherUser;
+    // Fallback if data is missing
+    const displayName = displayUser?.realName || displayUser?.name || "Unknown User";
+    const displayPhoto = displayUser?.photoURL || displayUser?.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in p-4">
             <div className="flex flex-col items-center gap-6 p-8 bg-[#1e293b] rounded-3xl border border-white/10 w-full max-w-sm shadow-2xl">
+                
+                {/* 👤 Avatar */}
                 <div className="relative">
                     <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl animate-pulse"></div>
-                    <img src={otherUser?.photoURL} className="relative w-28 h-28 rounded-full border-4 border-[#0f172a] object-cover z-10" />
+                    <img src={displayPhoto} className="relative w-28 h-28 rounded-full border-4 border-[#0f172a] object-cover z-10" />
                 </div>
                 
-                <h2 className="text-2xl font-bold text-white mt-2">{otherUser?.realName}</h2>
+                <h2 className="text-2xl font-bold text-white mt-2">{displayName}</h2>
                 <p className="text-blue-400 font-mono tracking-widest uppercase text-xs animate-pulse">
                     {callStatus === "calling" && "Dialing..."}
                     {callStatus === "incoming" && "Incoming Call..."}
                     {callStatus === "connected" && "Connected"}
                 </p>
 
+                {/* 🔊 FORCE AUDIO BUTTON */}
                 {callStatus === "connected" && (
                      <button onClick={onForceAudio} className="w-full bg-blue-600/20 text-blue-400 border border-blue-500/50 py-2 rounded-xl font-bold text-xs hover:bg-blue-600 hover:text-white transition">
                          🔊 Tap here if no sound
@@ -38,11 +47,14 @@ const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, onForceAu
                 )}
 
                 <div className="flex items-center gap-8 mt-2">
+                    {/* 🟢 ANSWER BUTTON (Only show if Incoming) */}
                     {callStatus === "incoming" && (
                         <button onClick={onAnswer} className="w-16 h-16 shrink-0 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition animate-bounce">
                             <span className="text-2xl">📞</span>
                         </button>
                     )}
+                    
+                    {/* 🔴 END BUTTON */}
                     <button onClick={callStatus === "incoming" ? onReject : onEnd} 
                         className="w-16 h-16 shrink-0 bg-red-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition hover:bg-red-600">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-8 h-8">
@@ -83,6 +95,7 @@ function PersonalChat({ userData, socket }) {
   // 📞 CALL STATES
   const [callStatus, setCallStatus] = useState("idle"); 
   const [callerSignal, setCallerSignal] = useState(null);
+  const [incomingCaller, setIncomingCaller] = useState(null); // 🆕 Stores info about who is calling YOU
   
   const notificationAudio = useRef(new Audio(NOTIFICATION_SOUND));
   const ringtoneAudio = useRef(new Audio(RINGTONE_SOUND));
@@ -126,6 +139,16 @@ function PersonalChat({ userData, socket }) {
            // 🛡️ BLOCK SELF-CALLS
            if (data.from === userData.uid) return;
 
+           // 🆕 SAVE CALLER INFO FOR UI
+           // data.name and data.from are sent from the server. 
+           // We might want to fetch their photo if not sent, but for now lets use what we have or 'otherUser' as fallback
+           setIncomingCaller({
+               realName: data.name,
+               uid: data.from,
+               // If data doesn't have photo, we assume it's the person in this chat (safe assumption for DM)
+               photoURL: (data.from === otherUid) ? otherUser?.photoURL : "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+           });
+
            setCallStatus("incoming");
            setCallerSignal(data.signal);
            ringtoneAudio.current.loop = true;
@@ -148,7 +171,7 @@ function PersonalChat({ userData, socket }) {
            socket.off("callEnded");
        };
     }
-  }, [roomId, userData]);
+  }, [roomId, userData, otherUser]); // Added otherUser dependency to update photo correctly
 
   const forceAudioPlay = () => {
       if(userAudio.current) {
@@ -165,12 +188,10 @@ function PersonalChat({ userData, socket }) {
       });
 
       peer.on("signal", (data) => {
-          // Identify Other UID
           const ids = roomId.split("_");
           const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
 
           if(initiator) {
-              // CALLING: Send to Specific User ID
               socket.emit("callUser", { 
                   userToCall: otherUid, 
                   signalData: data, 
@@ -178,10 +199,9 @@ function PersonalChat({ userData, socket }) {
                   name: userData.realName 
               });
           } else {
-              // ANSWERING: Send back to Caller's ID
-              // (If we were passed 'callerId' we would use it, but for now we calculate it)
-              // Since otherUid is the OTHER person in this chat, it works.
-              socket.emit("answerCall", { signal: data, to: otherUid }); 
+              // Answer sending back to the caller stored in incomingCaller
+              const targetId = incomingCaller?.uid || otherUid;
+              socket.emit("answerCall", { signal: data, to: targetId }); 
           }
       });
 
@@ -217,6 +237,7 @@ function PersonalChat({ userData, socket }) {
 
   const leaveCall = () => {
       setCallStatus("idle");
+      setIncomingCaller(null); // Clear caller info
       ringtoneAudio.current.pause();
       if (connectionRef.current) connectionRef.current.destroy();
       
@@ -289,7 +310,6 @@ function PersonalChat({ userData, socket }) {
                 </div>
             </div>
             
-            {/* 📞 CALL BUTTON */}
             <button onClick={callUser} className="p-3 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>
             </button>
@@ -331,7 +351,15 @@ function PersonalChat({ userData, socket }) {
         </div>
 
         {/* 📞 CALL MODAL */}
-        <CallModal callStatus={callStatus} otherUser={otherUser} onAnswer={answerCall} onReject={leaveCall} onEnd={leaveCall} onForceAudio={forceAudioPlay} />
+        <CallModal 
+            callStatus={callStatus} 
+            otherUser={otherUser} 
+            incomingCaller={incomingCaller} // 🎯 PASSED CORRECT DATA
+            onAnswer={answerCall} 
+            onReject={leaveCall} 
+            onEnd={leaveCall} 
+            onForceAudio={forceAudioPlay} 
+        />
         
         {/* 🔈 REMOTE AUDIO */}
         <audio ref={userAudio} autoPlay playsInline controls={false} />
