@@ -10,7 +10,20 @@ import {
 // 🎵 SOUND EFFECT
 const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3";
 
-// 👥 MEMBERS MODAL (For Mobile)
+// 🔔 NOTIFICATION BANNER (The Pop-up)
+const NotificationBanner = ({ message }) => {
+  if (!message) return null;
+  return (
+    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-bounce-in">
+      <div className="bg-emerald-600/90 backdrop-blur-md text-white px-6 py-2 rounded-full shadow-2xl border border-emerald-400/30 flex items-center gap-2">
+        <span className="text-lg">👋</span>
+        <span className="text-sm font-bold tracking-wide">{message}</span>
+      </div>
+    </div>
+  );
+};
+
+// 👥 MEMBERS MODAL
 const MembersModal = ({ users, onClose }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div className="bg-[#1e293b] border border-white/10 p-6 rounded-2xl w-80 max-h-[60vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -51,10 +64,13 @@ function GroupChat({ userData, socket }) {
 
   const [currentMessage, setCurrentMessage] = useState("");
   const [messageList, setMessageList] = useState([]); 
-  const [systemMessages, setSystemMessages] = useState([]); 
   const [userList, setUserList] = useState([]);
   const [showEmoji, setShowEmoji] = useState(false);
-  const [showMembers, setShowMembers] = useState(false); 
+  const [showMembers, setShowMembers] = useState(false);
+  
+  // 🔔 Notification State
+  const [notification, setNotification] = useState(null);
+  const notificationTimeoutRef = useRef(null);
   
   const notificationAudio = useRef(new Audio(NOTIFICATION_SOUND));
   const bottomRef = useRef(null);
@@ -66,9 +82,19 @@ function GroupChat({ userData, socket }) {
 
        socket.on("update_user_list", (users) => setUserList(users));
 
+       // 🆕 MODIFIED LISTENER: Handles System messages as Banners
        socket.on("receive_message", (data) => {
            if (data.author === "System" || !data.author) {
-               setSystemMessages(prev => [...prev, { ...data, id: `sys_${Date.now()}`, isSystem: true }]);
+               // Trigger the banner
+               setNotification(data.message);
+               
+               // Clear previous timeout if exists
+               if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
+               
+               // Remove banner after 3 seconds
+               notificationTimeoutRef.current = setTimeout(() => {
+                   setNotification(null);
+               }, 3000);
            }
        });
 
@@ -88,31 +114,24 @@ function GroupChat({ userData, socket }) {
           socket.emit("leave_room", roomId); 
           socket.off("update_user_list");
           socket.off("receive_message");
+          if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
           unsubscribeDb();
        };
     }
   }, [roomId, userData, socket]);
 
-  const combinedMessages = [...messageList, ...systemMessages].sort((a, b) => {
-      const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.timestamp || Date.now());
-      const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.timestamp || Date.now());
-      return timeA - timeB;
-  });
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [combinedMessages]);
+  }, [messageList]);
 
   // 🗑️ CLEAR CHAT FUNCTION
   const clearChat = async () => {
       if (confirm("⚠️ Are you sure you want to delete ALL messages in this room? This cannot be undone.")) {
-          // Loop through and delete from Firestore
           messageList.forEach(async (msg) => {
               if (msg.id) {
                   await deleteDoc(doc(db, "chats", roomId, "messages", msg.id));
               }
           });
-          setSystemMessages([]); // Clear local system messages
       }
   };
 
@@ -139,6 +158,9 @@ function GroupChat({ userData, socket }) {
   return (
     <div className="fixed inset-0 bg-[#0b0f19] flex font-sans overflow-hidden">
       
+      {/* 🔔 THE NOTIFICATION BANNER */}
+      <NotificationBanner message={notification} />
+
       {/* 🛑 SIDEBAR (DESKTOP) */}
       <div className="hidden md:flex flex-col w-[300px] h-full bg-black/20 backdrop-blur-xl border-r border-white/5 z-20">
            <div className="p-6 border-b border-white/5 bg-white/5 backdrop-blur-md">
@@ -183,27 +205,19 @@ function GroupChat({ userData, socket }) {
 
         {/* MESSAGES LIST */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-2 pb-24 custom-scrollbar bg-transparent">
-            {combinedMessages.map((msg, index) => {
+            {messageList.map((msg, index) => {
               const isMyMessage = userData.realName === msg.author;
-              const isSystem = msg.isSystem || msg.author === "System";
+              
+              // 🚫 We no longer render System messages here
+              if (msg.author === "System") return null;
 
               const msgDate = msg.fullDate ? new Date(msg.fullDate).toDateString() : null;
               const showDate = msgDate && msgDate !== lastDate;
               if (msgDate) lastDate = msgDate;
 
-              if (isSystem) {
-                  return (
-                    <div key={index} className="flex justify-center my-4 opacity-80 animate-fade-in">
-                        <span className="bg-white/5 border border-white/10 text-gray-400 text-[10px] px-3 py-1 rounded-full font-mono tracking-wider">
-                           {msg.message}
-                        </span>
-                    </div>
-                  );
-              }
-
               return (
                 <div key={index}>
-                    {showDate && !isSystem && (
+                    {showDate && (
                         <div className="flex justify-center my-6">
                             <span className="bg-white/5 border border-white/10 text-gray-400 text-[10px] px-3 py-1 rounded-full uppercase tracking-widest font-bold">
                                 {formatDate(msg.fullDate)}
@@ -255,6 +269,10 @@ function GroupChat({ userData, socket }) {
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-up { animation: fade-in-up 0.3s ease-out forwards; }
+        
+        @keyframes bounce-in { 0% { transform: translate(-50%, -20px); opacity: 0; } 50% { transform: translate(-50%, 10px); opacity: 1; } 100% { transform: translate(-50%, 0); } }
+        .animate-bounce-in { animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { bg: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
