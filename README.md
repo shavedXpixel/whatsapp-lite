@@ -1,71 +1,69 @@
-![WhatsApp Lite Banner](https://via.placeholder.com/1000x300/0f172a/10b981?text=WhatsApp+Lite)
-
 # WhatsApp Lite
 
-A premium, real-time messaging application built with **React** and **Firebase**. It features a modern Glassmorphism UI, seamless animations, and instant connectivity.
+A simple real-time messaging application built using **React** and **Firebase**.  
+This project is inspired by WhatsApp and focuses on fast messaging, clean UI, and responsive design.
 
 ---
 
-## ✨ Features
+## Features
 
-- **Real-time Messaging:** Instant chat with zero latency using Firestore listeners.
-- **Private & Group Chats:** Support for both 1-on-1 DMs and public chat rooms.
-- **Media Support:** Send images directly in the chat.
-- **Modern UI:** stunning Glassmorphism design with smooth entry animations.
-- **Fully Responsive:** Works perfectly on Desktop and Mobile (with custom mobile navigation).
-- **Secure Auth:** Google Sign-In and Email/Password authentication.
+- Real-time messaging using Firebase Firestore
+- User authentication (Google Sign-In & Email/Password)
+- Private and group chats
+- Image sharing in chats
+- Responsive design for desktop and mobile
+- Clean and modern UI
 
-## 🛠️ Tech Stack
+---
 
-- **Frontend:** React.js, Tailwind CSS, Framer Motion
+## Tech Stack
+
+- **Frontend:** React.js, Tailwind CSS
 - **Backend:** Firebase Authentication, Firestore Database
 - **Routing:** React Router DOM
 
-## 🚀 Installation & Setup
+---
 
-1. **Clone the repository**
-   ```bash
-   git clone [https://github.com/your-username/whatsapp-lite.git](https://github.com/your-username/whatsapp-lite.git)
-   cd whatsapp-lite
-   
-2. **Install Dependencies**
+## Installation & Setup
 
-   ```bash
-   npm install
+### 1. Clone the repository
+  ```bash
+  git clone https://github.com/your-username/whatsapp-lite.git
+  cd whatsapp-lite
 
-3. **Configure Firebase**
+### 2. Install dependencies
+  ```bash
+  npm install
 
-   Create a project at Firebase Console.
+### 3. Configure Firebase
 
-   Enable Authentication and Firestore Database.
+  Create a project in Firebase Console
 
-   Create a .env file in the root folder and add your API keys:
+  Enable Authentication and Firestore Database
 
-4. **Code snippet**
+  Create a .env file in the root folder
 
-   VITE_API_KEY=your_api_key
+  VITE_API_KEY=your_api_key
 
-   VITE_AUTH_DOMAIN=your_project_id.firebaseapp.com 
+  VITE_AUTH_DOMAIN=your_project_id.firebaseapp.com
 
-   VITE_PROJECT_ID=your_project_id
+  VITE_PROJECT_ID=your_project_id
 
-   VITE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+  VITE_STORAGE_BUCKET=your_project_id.appspot.com
 
-   VITE_MESSAGING_SENDER_ID=your_sender_id
+  VITE_MESSAGING_SENDER_ID=your_sender_id
 
-   VITE_APP_ID=your_app_id
+  VITE_APP_ID=your_app_id
 
-5. **Run the App**
+### 4. Run the app
+  ```bash
+  npm run dev
 
-   ```bash
-   npm run dev
 
-**👨‍💻 Author**
+Open http://localhost:5173 in your browser.
 
-   Priyansu Dash
+Author
 
-   Role: Full Stack Developer
-
-   Email: pupuhari123@gmail.com
-
-Crafted with 💙 by Priyansu
+Priyansu Dash
+Full Stack Developer
+📧 Email: pupuhari123@gmail.com
