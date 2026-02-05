@@ -13,7 +13,7 @@ const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2354/235
 const RINGTONE_SOUND = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
 
 // 📞 CALL MODAL
-const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, debugMsg }) => {
+const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, debugMsg, onForceAudio }) => {
     if (callStatus === "idle") return null;
 
     return (
@@ -26,7 +26,7 @@ const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, debugMsg 
                 
                 <h2 className="text-2xl font-bold text-white mt-4">{otherUser?.realName}</h2>
                 
-                {/* 🛠️ DEBUG MESSAGE: Shows what is happening */}
+                {/* 🛠️ DEBUG / STATUS MESSAGE */}
                 <div className="bg-black/40 px-4 py-2 rounded-lg border border-white/10">
                     <p className="text-emerald-400 font-mono text-xs uppercase tracking-widest animate-pulse">
                         {callStatus === "calling" && "Dialing..."}
@@ -34,6 +34,13 @@ const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, debugMsg 
                         {callStatus === "connected" && (debugMsg || "Connected")}
                     </p>
                 </div>
+
+                {/* 🔊 FORCE AUDIO BUTTON (Fix for Browser Blocking) */}
+                {callStatus === "connected" && (
+                    <button onClick={onForceAudio} className="flex items-center gap-2 bg-blue-600/30 text-blue-300 px-4 py-2 rounded-full text-xs font-bold border border-blue-500/50 hover:bg-blue-600 hover:text-white transition">
+                        🔊 Tap if no sound
+                    </button>
+                )}
 
                 <div className="flex gap-8 mt-4">
                     {callStatus === "incoming" && (
@@ -76,8 +83,8 @@ function PersonalChat({ userData, socket }) {
   // 📞 CALL STATES
   const [callStatus, setCallStatus] = useState("idle"); 
   const [callerSignal, setCallerSignal] = useState(null);
-  const [remoteStream, setRemoteStream] = useState(null); // 🔊 Store Remote Stream in State
-  const [debugMsg, setDebugMsg] = useState(""); // 🛠️ Debugger
+  const [remoteStream, setRemoteStream] = useState(null); 
+  const [debugMsg, setDebugMsg] = useState(""); 
 
   const notificationAudio = useRef(new Audio(NOTIFICATION_SOUND));
   const ringtoneAudio = useRef(new Audio(RINGTONE_SOUND));
@@ -118,7 +125,7 @@ function PersonalChat({ userData, socket }) {
 
        socket.on("callAccepted", (signal) => {
            setCallStatus("connected");
-           setDebugMsg("Connection Established");
+           setDebugMsg("Connecting Media...");
            if(connectionRef.current) connectionRef.current.signal(signal);
        });
 
@@ -133,15 +140,26 @@ function PersonalChat({ userData, socket }) {
     }
   }, [roomId, userData]);
 
-  // 🔊 AUDIO STREAM HANDLER
+  // 🔊 AUDIO STREAM HANDLER (Auto-play logic)
   useEffect(() => {
       if (userAudio.current && remoteStream) {
-          console.log("🔊 ATTACHING AUDIO STREAM", remoteStream);
+          console.log("🔊 STREAM READY - Attempting AutoPlay");
           userAudio.current.srcObject = remoteStream;
-          userAudio.current.play().catch(e => console.error("Audio Play Error:", e));
-          setDebugMsg("Audio Active 🔊");
+          userAudio.current.onloadedmetadata = () => {
+              userAudio.current.play()
+                  .then(() => setDebugMsg("Audio Playing 🔊"))
+                  .catch(e => setDebugMsg("Tap 'Tap if no sound' button!"));
+          };
       }
   }, [remoteStream]);
+
+  // 🛠️ FORCE PLAY FUNCTION
+  const forceAudioPlay = () => {
+      if(userAudio.current) {
+          userAudio.current.play();
+          setDebugMsg("Audio Forced 🔊");
+      }
+  };
 
   const callUser = () => {
       setCallStatus("calling");
@@ -159,7 +177,7 @@ function PersonalChat({ userData, socket }) {
 
           peer.on("stream", (stream) => {
               console.log("🎤 CALLER RECEIVED STREAM");
-              setRemoteStream(stream); // Set State to trigger useEffect
+              setRemoteStream(stream); 
           });
 
           socket.on("callAccepted", (signal) => {
@@ -193,7 +211,7 @@ function PersonalChat({ userData, socket }) {
           
           peer.on("stream", (stream) => {
               console.log("🎤 RECEIVER RECEIVED STREAM");
-              setRemoteStream(stream); // Set State to trigger useEffect
+              setRemoteStream(stream);
           });
           
           peer.signal(callerSignal);
@@ -312,8 +330,8 @@ function PersonalChat({ userData, socket }) {
             <button onClick={() => sendMessage()} className="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform hover:bg-blue-500"><span className="-ml-0.5 text-lg">➤</span></button>
         </div>
 
-        {/* 📞 CALL MODAL - PASSING DEBUG MSG */}
-        <CallModal callStatus={callStatus} otherUser={otherUser} onAnswer={answerCall} onReject={leaveCall} onEnd={leaveCall} debugMsg={debugMsg} />
+        {/* 📞 CALL MODAL - Passed Debug & Force Function */}
+        <CallModal callStatus={callStatus} otherUser={otherUser} onAnswer={answerCall} onReject={leaveCall} onEnd={leaveCall} debugMsg={debugMsg} onForceAudio={forceAudioPlay} />
         
         {/* 🔈 REMOTE AUDIO (Hidden but active) */}
         <audio ref={userAudio} autoPlay playsInline controls={false} />
