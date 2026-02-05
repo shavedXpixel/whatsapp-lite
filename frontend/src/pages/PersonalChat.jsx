@@ -55,20 +55,19 @@ function PersonalChat({ userData, socket }) {
   const notificationAudio = useRef(new Audio(NOTIFICATION_SOUND));
   const bottomRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const fileInputRef = useRef(null); // 📸 REF FOR FILE INPUT
 
   // 1. SETUP
   useEffect(() => {
     if (userData && roomId) {
        socket.emit("join_room", { room: roomId, username: userData.realName });
 
-       // Get Other User Details
        const ids = roomId.split("_");
        const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
        getDoc(doc(db, "users", otherUid)).then(snap => {
            if(snap.exists()) setOtherUser(snap.data());
        });
 
-       // Listen to Messages
        const q = query(collection(db, "chats", roomId, "messages"), orderBy("createdAt", "asc"));
        const unsubscribe = onSnapshot(q, (snapshot) => {
            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -77,7 +76,6 @@ function PersonalChat({ userData, socket }) {
            if (msgs.length > 0) {
                const lastMsg = msgs[msgs.length - 1];
                if (lastMsg.author !== userData.realName) {
-                   // Mark Read
                    updateDoc(doc(db, "userChats", userData.uid), { [`${roomId}.unread`]: false }).catch(()=>{});
                    notificationAudio.current.play().catch(()=>{}); 
                }
@@ -95,17 +93,35 @@ function PersonalChat({ userData, socket }) {
     return () => { socket.off("display_typing"); socket.off("hide_typing"); };
   }, [socket]);
 
-  // 3. AUTO SCROLL
   useEffect(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), [messageList, typingUser]);
 
-  const sendMessage = async () => {
-    if (currentMessage.trim() === "") return;
+  // 📸 HANDLE IMAGE SELECTION
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 500 * 1024) {
+        alert("Image too large! Please send images under 500KB.");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+        await sendMessage(reader.result, "image"); // Send as Image Type
+    };
+  };
+
+  const sendMessage = async (content = currentMessage, type = "text") => {
+    if (type === "text" && content.trim() === "") return;
     
     const messageData = {
         room: roomId,
         author: userData.realName,
         photo: userData.photoURL,
-        message: currentMessage,
+        message: type === "text" ? content : "📷 Image", // Fallback text for sidebar
+        image: type === "image" ? content : null,        // Store Base64 here
+        type: type,                                      // 'text' or 'image'
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         fullDate: new Date().toISOString(),
         createdAt: serverTimestamp(),
@@ -114,22 +130,25 @@ function PersonalChat({ userData, socket }) {
 
     await addDoc(collection(db, "chats", roomId, "messages"), messageData);
     
-    // Update Recent Chats
+    // Update Sidebar Logic
     const ids = roomId.split("_");
     const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
     
+    const chatUpdate = { 
+        lastMessage: type === "text" ? content : "📷 Image", 
+        date: serverTimestamp() 
+    };
+
     const myChatRef = doc(db, "userChats", userData.uid);
-    setDoc(myChatRef, { [roomId]: { 
-        userInfo: { uid: otherUid }, lastMessage: currentMessage, date: serverTimestamp(), unread: false 
-    }}, { merge: true });
+    setDoc(myChatRef, { [roomId]: { userInfo: { uid: otherUid }, unread: false, ...chatUpdate }}, { merge: true });
 
     const theirChatRef = doc(db, "userChats", otherUid);
     setDoc(theirChatRef, { [roomId]: { 
         userInfo: { uid: userData.uid, displayName: userData.realName, photoURL: userData.photoURL }, 
-        lastMessage: currentMessage, date: serverTimestamp(), unread: true 
+        unread: true, ...chatUpdate 
     }}, { merge: true });
 
-    setCurrentMessage("");
+    if (type === "text") setCurrentMessage("");
     socket.emit("stop_typing", roomId);
   };
 
@@ -143,7 +162,6 @@ function PersonalChat({ userData, socket }) {
   if (!userData) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
   return (
-    // ✅ FIXED LAYOUT FOR MOBILE
     <div className="fixed inset-0 bg-[#0b0f19] flex flex-col font-sans">
         
         {/* HEADER */}
@@ -161,14 +179,21 @@ function PersonalChat({ userData, socket }) {
             <button onClick={() => navigate("/")} className="text-[10px] md:text-xs px-3 py-2 rounded-lg bg-blue-900/20 text-blue-300 border border-blue-500/20">Dashboard</button>
         </div>
 
-        {/* MESSAGES - Added padding bottom (pb-24) so last message isn't hidden behind input */}
+        {/* MESSAGES */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-24 custom-scrollbar">
             {messageList.map((msg, idx) => {
                 const isMe = msg.author === userData.realName;
                 return (
                     <div key={idx} className={`flex w-full ${isMe ? "justify-end" : "justify-start"}`}>
                         <div className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm ${isMe ? "bg-blue-600 text-white rounded-br-none" : "bg-white/10 text-gray-200 rounded-bl-none"}`}>
-                            <p>{msg.message}</p>
+                            
+                            {/* 🖼️ IMAGE MESSAGE */}
+                            {msg.type === "image" ? (
+                                <img src={msg.image} className="w-full max-w-[200px] rounded-lg mb-1 border border-white/10" alt="sent" />
+                            ) : (
+                                <p>{msg.message}</p>
+                            )}
+
                             <div className="flex justify-end gap-1 mt-1 opacity-70 text-[10px]">
                                 <span>{msg.time}</span>
                                 <MessageStatus isMyMessage={isMe} status={msg.status} />
@@ -181,12 +206,22 @@ function PersonalChat({ userData, socket }) {
             <div ref={bottomRef} />
         </div>
 
-        {/* INPUT - Fixed to bottom with safe-area support */}
+        {/* INPUT - With Paperclip */}
         <div className="fixed bottom-0 left-0 w-full bg-[#0b0f19] border-t border-white/10 p-3 flex gap-2 z-40 pb-safe">
+            
+            {/* 📸 HIDDEN FILE INPUT */}
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+            
+            {/* 📎 ATTACHMENT BUTTON */}
+            <button onClick={() => fileInputRef.current.click()} className="text-gray-400 hover:text-white p-3 rounded-full hover:bg-white/5 transition">
+                📎
+            </button>
+
             <input className="flex-1 bg-white/5 text-white p-3 rounded-full outline-none text-sm border border-white/5 focus:border-blue-500/50 transition-all placeholder-gray-500" 
                 placeholder="Type a message..." value={currentMessage} onChange={handleTyping} 
                 onKeyPress={(e) => e.key === "Enter" && sendMessage()} />
-            <button onClick={sendMessage} className="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform hover:bg-blue-500">
+            
+            <button onClick={() => sendMessage()} className="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform hover:bg-blue-500">
                 <span className="-ml-0.5 text-lg">➤</span>
             </button>
         </div>
@@ -195,7 +230,6 @@ function PersonalChat({ userData, socket }) {
 
         <style>{`
             .pb-safe { padding-bottom: env(safe-area-inset-bottom); } 
-            /* Fix for iOS Scroll Bounce showing white background */
             body { background-color: #0b0f19; }
         `}</style>
     </div>
