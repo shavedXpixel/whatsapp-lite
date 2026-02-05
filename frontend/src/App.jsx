@@ -4,6 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { socket } from "./socket"; 
+import Profile from "./pages/Profile";
 
 // 🆕 IMPORT NEW PAGES
 import Login from "./pages/Login";
@@ -59,6 +60,17 @@ function App() {
         </Routes>
       </div>
     </BrowserRouter>
+  );
+  return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={user ? <Home userData={user} socket={socket} /> : <Login />} />
+          <Route path="/chat/:roomId" element={user ? <Chat userData={user} socket={socket} /> : <Login />} />
+          
+          {/* ✅ ADD THIS NEW ROUTE */}
+          <Route path="/profile" element={user ? <Profile userData={user} /> : <Login />} />
+        </Routes>
+      </BrowserRouter>
   );
 }
 
