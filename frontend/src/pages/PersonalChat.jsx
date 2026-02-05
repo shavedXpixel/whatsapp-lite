@@ -27,14 +27,29 @@ const VideoCallScreen = ({ localStream, remoteStream, onEnd, toggleMic, toggleVi
             <div className="absolute inset-0 w-full h-full">
                 {remoteStream ? <video ref={userVideo} autoPlay playsInline className="w-full h-full object-cover transform scale-x-[-1]" /> : <div className="flex items-center justify-center h-full text-white animate-pulse">Connecting Video...</div>}
             </div>
-            <div className="absolute bottom-24 right-4 w-32 h-48 md:w-48 md:h-64 bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10">
+            
+            {/* PiP Local Video */}
+            <div className="absolute bottom-28 right-4 w-32 h-48 md:w-48 md:h-64 bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10">
                 <video ref={myVideo} autoPlay playsInline muted className={`w-full h-full object-cover transform scale-x-[-1] ${!isVideoOn ? 'hidden' : ''}`} />
                 {!isVideoOn && <div className="absolute inset-0 flex items-center justify-center text-2xl">🚫</div>}
             </div>
-            <div className="absolute bottom-6 flex items-center gap-6 p-4 bg-black/40 backdrop-blur-md rounded-full border border-white/10 z-20">
-                <button onClick={toggleMic} className={`p-4 rounded-full transition ${isMicOn ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 text-white'}`}>{isMicOn ? "🎤" : "🔇"}</button>
-                <button onClick={onEnd} className="p-4 bg-red-600 rounded-full hover:bg-red-500 transition shadow-lg transform hover:scale-110"><svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-6 h-6"><path d="M20.25 6.75l-2.25-2.25-6 6-6-6-2.25 2.25 6 6-6 6 2.25-2.25-6-6 6 6 2.25-2.25-6-6 6-6z" /></svg></button>
-                <button onClick={toggleVideo} className={`p-4 rounded-full transition ${isVideoOn ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 text-white'}`}>{isVideoOn ? "📹" : "🚫"}</button>
+
+            {/* 🎛️ CONTROLS BAR */}
+            <div className="absolute bottom-8 flex items-center gap-6 p-4 bg-black/40 backdrop-blur-md rounded-full border border-white/10 z-20">
+                <button onClick={toggleMic} className={`w-14 h-14 rounded-full flex items-center justify-center transition ${isMicOn ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white text-black'}`}>
+                    {isMicOn ? "🎤" : "🔇"}
+                </button>
+                
+                {/* 🔴 FIXED END BUTTON */}
+                <button onClick={onEnd} className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-500 transition shadow-lg transform hover:scale-105 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-8 h-8">
+                        <path d="M20.25 6.75l-2.25-2.25-6 6-6-6-2.25 2.25 6 6-6 6 2.25 2.25 6-6 6 6 2.25-2.25-6-6 6-6z" /> 
+                    </svg>
+                </button>
+
+                <button onClick={toggleVideo} className={`w-14 h-14 rounded-full flex items-center justify-center transition ${isVideoOn ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white text-black'}`}>
+                    {isVideoOn ? "📹" : "🚫"}
+                </button>
             </div>
         </div>
     );
@@ -49,7 +64,7 @@ const AudioCallScreen = ({ otherUser, incomingCaller, onEnd, toggleMic, isMicOn,
     const displayPhoto = displayUser?.photoURL || displayUser?.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 
     return (
-        <div className="fixed inset-0 z-[200] bg-[#0f172a] flex flex-col items-center justify-center animate-fade-in">
+        <div className="fixed inset-0 z-[200] bg-[#0f172a] flex flex-col items-center justify-center animate-fade-in p-6 text-center">
              <div className="relative mb-8">
                 <div className="absolute inset-0 bg-green-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
                 <img src={displayPhoto} className="relative w-40 h-40 rounded-full border-4 border-[#1e293b] object-cover z-10 shadow-2xl" />
@@ -57,15 +72,18 @@ const AudioCallScreen = ({ otherUser, incomingCaller, onEnd, toggleMic, isMicOn,
             <h2 className="text-3xl font-bold text-white mb-2">{displayName}</h2>
             <p className="text-green-400 font-mono tracking-widest uppercase text-sm mb-12 animate-pulse">Audio Call Connected</p>
 
-            {/* FORCE AUDIO BUTTON (Important for Audio Calls) */}
             <button onClick={onForceAudio} className="mb-8 px-6 py-2 bg-white/5 rounded-full text-xs text-blue-300 border border-blue-500/30 hover:bg-white/10">🔊 Tap if no sound</button>
 
             <div className="flex items-center gap-8">
-                <button onClick={toggleMic} className={`p-6 rounded-full transition shadow-xl ${isMicOn ? 'bg-[#1e293b] hover:bg-[#334155]' : 'bg-white text-black'}`}>
+                <button onClick={toggleMic} className={`w-16 h-16 rounded-full flex items-center justify-center transition shadow-xl ${isMicOn ? 'bg-[#1e293b] hover:bg-[#334155] text-white' : 'bg-white text-black'}`}>
                      <span className="text-2xl">{isMicOn ? "🎤" : "🔇"}</span>
                 </button>
-                <button onClick={onEnd} className="p-6 bg-red-500 rounded-full hover:bg-red-600 transition shadow-xl transform hover:scale-110">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-8 h-8"><path d="M20.25 6.75l-2.25-2.25-6 6-6-6-2.25 2.25 6 6-6 6 2.25-2.25-6-6 6 6 2.25-2.25-6-6 6-6z" /></svg>
+                
+                {/* 🔴 FIXED END BUTTON */}
+                <button onClick={onEnd} className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition shadow-xl transform hover:scale-105 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-10 h-10">
+                        <path d="M20.25 6.75l-2.25-2.25-6 6-6-6-2.25 2.25 6 6-6 6 2.25 2.25 6-6 6 6 2.25-2.25-6-6 6-6z" />
+                    </svg>
                 </button>
             </div>
         </div>
@@ -105,8 +123,10 @@ const CallModal = ({ callStatus, callType, otherUser, incomingCaller, onAnswer, 
                             <span className="text-2xl">{callType === "video" ? "📹" : "📞"}</span>
                         </button>
                     )}
+                    
+                    {/* 🔴 FIXED END BUTTON */}
                     <button onClick={onReject} className="w-16 h-16 shrink-0 bg-red-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition hover:bg-red-600">
-                         <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-8 h-8"><path d="M20.25 6.75l-2.25-2.25-6 6-6-6-2.25 2.25 6 6-6 6 2.25-2.25-6-6 6 6 2.25-2.25-6-6 6-6z" /></svg>
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-8 h-8"><path d="M20.25 6.75l-2.25-2.25-6 6-6-6-2.25 2.25 6 6-6 6 2.25 2.25 6-6 6 6 2.25-2.25-6-6 6-6z" /></svg>
                     </button>
                 </div>
             </div>
@@ -142,7 +162,7 @@ function PersonalChat({ userData, socket }) {
   
   // 📞 CALL STATES
   const [callStatus, setCallStatus] = useState("idle"); 
-  const [callType, setCallType] = useState("audio"); // 'audio' or 'video'
+  const [callType, setCallType] = useState("audio"); 
   const [callerSignal, setCallerSignal] = useState(null);
   const [incomingCaller, setIncomingCaller] = useState(null);
   
@@ -207,7 +227,7 @@ function PersonalChat({ userData, socket }) {
            const callerPhoto = (data.from === otherUid && otherUser?.photoURL) ? otherUser.photoURL : "https://cdn-icons-png.flaticon.com/512/149/149071.png";
            setIncomingCaller({ realName: data.name, uid: data.from, photoURL: callerPhoto });
            setCallStatus("incoming");
-           setCallType(data.callType || "audio"); // 🆕 Read call type
+           setCallType(data.callType || "audio"); 
            setCallerSignal(data.signal);
            ringtoneAudio.current.loop = true;
            ringtoneAudio.current.play().catch(() => {});
@@ -253,7 +273,6 @@ function PersonalChat({ userData, socket }) {
           const ids = roomId.split("_");
           const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
           if(initiator) {
-              // 🆕 Send callType along with signal
               socket.emit("callUser", { 
                   userToCall: otherUid, 
                   signalData: data, 
@@ -269,7 +288,7 @@ function PersonalChat({ userData, socket }) {
 
       peer.on("stream", (stream) => {
           setRemoteStream(stream); 
-          if(userAudio.current) { // Ensure audio plays for both modes
+          if(userAudio.current) { 
                userAudio.current.srcObject = stream;
                userAudio.current.play().catch(e => console.log("Autoplay blocked"));
           }
@@ -278,7 +297,6 @@ function PersonalChat({ userData, socket }) {
       return peer;
   };
 
-  // 🏁 START CALL (Takes Type: 'audio' or 'video')
   const startCall = (type) => {
       setCallStatus("calling");
       setCallType(type);
@@ -296,7 +314,6 @@ function PersonalChat({ userData, socket }) {
   const answerCall = () => {
       setCallStatus("connected");
       ringtoneAudio.current.pause();
-      // 🆕 Request media based on incoming call type
       const constraints = { video: callType === "video", audio: true };
 
       navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
@@ -315,7 +332,6 @@ function PersonalChat({ userData, socket }) {
       ringtoneAudio.current.pause();
       if (connectionRef.current) connectionRef.current.destroy();
       
-      // Stop all tracks
       if (localStream) localStream.getTracks().forEach(track => track.stop());
 
       const ids = roomId.split("_");
@@ -324,7 +340,6 @@ function PersonalChat({ userData, socket }) {
       window.location.reload(); 
   };
 
-  // 🎛️ CONTROLS
   const toggleMic = () => {
       if (localStream) {
           const audioTrack = localStream.getAudioTracks()[0];
