@@ -16,7 +16,10 @@ const RINGTONE_SOUND = "https://assets.mixkit.co/active_storage/sfx/1359/1359-pr
 const CallModal = ({ callStatus, otherUser, incomingCaller, onAnswer, onReject, onEnd, onForceAudio }) => {
     if (callStatus === "idle") return null;
 
-    const displayUser = callStatus === "incoming" ? incomingCaller : otherUser;
+    // 🎯 CRITICAL FIX: If we have an incoming caller data, STICK WITH IT.
+    // Even if status changes to "connected", we want to see the person who called us.
+    const displayUser = incomingCaller || otherUser;
+    
     const displayName = displayUser?.realName || displayUser?.name || "Unknown User";
     const displayPhoto = displayUser?.photoURL || displayUser?.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 
@@ -122,27 +125,21 @@ function PersonalChat({ userData, socket }) {
            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
            setMessageList(msgs);
            
-           // 🛑 BLOCK SOUND ON FIRST LOAD
            if (isInitialLoad.current) {
                if(msgs.length > 0) {
                    lastMessageIdRef.current = msgs[msgs.length - 1].id;
                }
                isInitialLoad.current = false;
-               return; // STOP EXECUTION HERE
+               return; 
            }
 
            if (msgs.length > 0) {
                const lastMsg = msgs[msgs.length - 1];
-               
-               // 🎵 SOUND LOGIC: Only if ID is strictly NEW
                if (lastMsg.id !== lastMessageIdRef.current) {
                    lastMessageIdRef.current = lastMsg.id; 
-                   
                    const isMyMessage = lastMsg.uid ? (lastMsg.uid === userData.uid) : (lastMsg.author === userData.realName);
                    if (!isMyMessage) {
                        updateDoc(doc(db, "userChats", userData.uid), { [`${roomId}.unread`]: false }).catch(()=>{});
-                       
-                       // Only play if tab is hidden to avoid annoying active user
                        if(document.visibilityState === "hidden") {
                            notificationAudio.current.play().catch(()=>{}); 
                        }
@@ -154,11 +151,21 @@ function PersonalChat({ userData, socket }) {
        socket.off("callUser"); 
        socket.on("callUser", (data) => {
            if (data.from === userData.uid) return;
+           
+           // ✅ Ensure we capture the caller's photo correctly
+           // If they called me, I want THEIR photo. 
+           // If I am chatting with 'otherUser' and THEY called, use otherUser.photo.
+           // If a random person called, use default.
+           const callerPhoto = (data.from === otherUid && otherUser?.photoURL) 
+                ? otherUser.photoURL 
+                : "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+
            setIncomingCaller({
                realName: data.name,
                uid: data.from,
-               photoURL: (data.from === otherUid) ? otherUser?.photoURL : "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+               photoURL: callerPhoto
            });
+           
            setCallStatus("incoming");
            setCallerSignal(data.signal);
            ringtoneAudio.current.loop = true;
@@ -181,19 +188,15 @@ function PersonalChat({ userData, socket }) {
            socket.off("callEnded");
        };
     }
-  }, [roomId, userData, otherUser]);
+  }, [roomId, userData, otherUser]); // otherUser dependency ensures we have the photo ready
 
-  // 📜 PEACEFUL SCROLLING (No Pull-Down)
   useLayoutEffect(() => {
       const container = scrollContainerRef.current;
       const currentLength = messageList.length;
       const prevLength = prevMessageListLength.current;
 
       if (container && currentLength > prevLength) {
-          // Check if user is currently looking at the bottom
           const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-          
-          // Force scroll only on initial load OR if user is already at the bottom
           if (prevLength === 0 || isNearBottom) {
               bottomRef.current?.scrollIntoView({ behavior: "smooth" });
           }
@@ -271,7 +274,8 @@ function PersonalChat({ userData, socket }) {
       const ids = roomId.split("_");
       const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
       
-      socket.emit("endCall", { to: otherUid }); 
+      // Attempt to end for both: Caller or Chat Partner
+      socket.emit("endCall", { to: incomingCaller?.uid || otherUid }); 
       window.location.reload(); 
   };
 
@@ -302,7 +306,6 @@ function PersonalChat({ userData, socket }) {
     setShowEmoji(false);
     socket.emit("stop_typing", roomId);
     
-    // Always scroll down when I send
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
@@ -342,7 +345,7 @@ function PersonalChat({ userData, socket }) {
             </button>
         </div>
 
-        {/* MESSAGES - Attached ref to container for scroll logic */}
+        {/* MESSAGES */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-2 pb-24 custom-scrollbar">
             {messageList.map((msg, idx) => {
                 const isMe = msg.uid ? (msg.uid === userData.uid) : (msg.author === userData.realName);
