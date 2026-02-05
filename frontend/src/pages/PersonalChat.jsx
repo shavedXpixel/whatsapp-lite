@@ -149,7 +149,13 @@ function PersonalChat({ userData, socket }) {
       setCallStatus("calling");
       navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then((currentStream) => {
           setStream(currentStream);
-          const peer = new Peer({ initiator: true, trickle: false, stream: currentStream });
+          // 🛡️ UPDATED: Added STUN servers for internet connection
+          const peer = new Peer({ 
+              initiator: true, 
+              trickle: false, 
+              stream: currentStream,
+              config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }] }
+          });
 
           peer.on("signal", (data) => {
               socket.emit("callUser", { userToCall: roomId, signalData: data, from: userData.uid, name: userData.realName });
@@ -168,7 +174,13 @@ function PersonalChat({ userData, socket }) {
       
       navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then((currentStream) => {
           setStream(currentStream);
-          const peer = new Peer({ initiator: false, trickle: false, stream: currentStream });
+          // 🛡️ UPDATED: Added STUN servers here too
+          const peer = new Peer({ 
+              initiator: false, 
+              trickle: false, 
+              stream: currentStream,
+              config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }] }
+          });
           
           peer.on("signal", (data) => {
               socket.emit("answerCall", { signal: data, to: roomId });
@@ -299,9 +311,9 @@ function PersonalChat({ userData, socket }) {
         {/* 📞 CALL MODAL */}
         <CallModal callStatus={callStatus} otherUser={otherUser} onAnswer={answerCall} onReject={leaveCall} onEnd={leaveCall} />
         
-        {/* 🔈 HIDDEN AUDIO ELEMENTS */}
+        {/* 🔈 HIDDEN AUDIO ELEMENTS - Updated with playsInline */}
         <audio ref={myAudio} muted />
-        <audio ref={userAudio} autoPlay />
+        <audio ref={userAudio} autoPlay playsInline controls={false} />
 
         <style>{`
             .pb-safe { padding-bottom: env(safe-area-inset-bottom); } 
