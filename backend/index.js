@@ -6,7 +6,7 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
-// 🆕 HEALTH CHECK ROUTE
+// 🆕 HEALTH CHECK ROUTE (The "Wake Up" Page)
 app.get("/", (req, res) => {
   res.send(`
     <html>
@@ -60,13 +60,6 @@ function getUsersInRoom(room) {
 io.on("connection", (socket) => {
   console.log(`User Connected: ${socket.id}`);
 
-  // 🆕 1. SETUP: Creates a private channel for the user when they login/open app
-  socket.on("setup", (userData) => {
-    socket.join(userData.uid); 
-    console.log(`User ${userData.uid} connected to their private channel`);
-    socket.emit("connected");
-  });
-
   socket.on("join_room", (data) => {
     const { username, room } = data;
     socket.join(room);
@@ -98,23 +91,22 @@ io.on("connection", (socket) => {
     socket.to(data.room).emit("message_status_updated", data);
   });
 
-  // 📞 CALLING EVENTS (UPDATED for Global Calling) 📞
-  
-  // 1. Caller initiates call (Targeting specific USER now, not just room)
+  // 📞 CALLING EVENTS (WebRTC Signaling) 📞
+  // 1. Caller initiates call
   socket.on("callUser", ({ userToCall, signalData, from, name }) => {
-      // io.to() sends to the specific User's Private Channel
-      io.to(userToCall).emit("callUser", { signal: signalData, from, name });
+      // userToCall is actually the 'roomId' in our app, so we broadcast to that room
+      socket.to(userToCall).emit("callUser", { signal: signalData, from, name });
   });
 
   // 2. Receiver answers call
   socket.on("answerCall", (data) => {
-      // data.to is the Caller's UID
-      io.to(data.to).emit("callAccepted", data.signal);
+      // data.to is the roomId
+      socket.to(data.to).emit("callAccepted", data.signal);
   });
 
   // 3. Either party ends call
   socket.on("endCall", ({ to }) => {
-      io.to(to).emit("callEnded");
+      socket.to(to).emit("callEnded");
   });
 
   socket.on("disconnect", () => {
