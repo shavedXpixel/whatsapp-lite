@@ -91,6 +91,24 @@ io.on("connection", (socket) => {
     socket.to(data.room).emit("message_status_updated", data);
   });
 
+  // 📞 CALLING EVENTS (WebRTC Signaling) 📞
+  // 1. Caller initiates call
+  socket.on("callUser", ({ userToCall, signalData, from, name }) => {
+      // userToCall is actually the 'roomId' in our app, so we broadcast to that room
+      socket.to(userToCall).emit("callUser", { signal: signalData, from, name });
+  });
+
+  // 2. Receiver answers call
+  socket.on("answerCall", (data) => {
+      // data.to is the roomId
+      socket.to(data.to).emit("callAccepted", data.signal);
+  });
+
+  // 3. Either party ends call
+  socket.on("endCall", ({ to }) => {
+      socket.to(to).emit("callEnded");
+  });
+
   socket.on("disconnect", () => {
     const user = userMap[socket.id];
     if (user) {

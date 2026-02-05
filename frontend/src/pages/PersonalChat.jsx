@@ -1,33 +1,59 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import EmojiPicker from "emoji-picker-react"; // 😃 IMPORT EMOJI PICKER
+import EmojiPicker from "emoji-picker-react";
+import Peer from "simple-peer"; // 📞 IMPORT PEER
 import { db } from "../firebase";
 import { 
   doc, getDoc, setDoc, updateDoc, serverTimestamp, 
   collection, addDoc, query, orderBy, onSnapshot 
 } from "firebase/firestore";
 
-// 🎵 SOUND EFFECT
+// 🎵 SOUNDS
 const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3";
+const RINGTONE_SOUND = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
 
-// 🆔 PROFILE MODAL
-const ProfileModal = ({ user, onClose }) => {
-  if (!user) return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-      <div className="bg-[#1e293b] border border-white/10 p-6 rounded-3xl shadow-2xl max-w-sm w-full relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">✕</button>
-        <img src={user.photo || user.photoURL} className="w-32 h-32 rounded-full object-cover border-4 border-[#1e293b] mb-4 shadow-lg" />
-        <h2 className="text-2xl font-bold text-white">{user.name || user.displayName || user.realName}</h2>
-        <div className="w-full bg-black/20 rounded-xl p-4 text-center border border-white/5 mt-4">
-            <p className="text-gray-400 text-xs uppercase font-bold mb-1">About</p>
-            <p className="text-gray-200 italic">"{user.about || "No status set."}"</p>
+// 📞 CALL MODAL COMPONENT
+const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd }) => {
+    if (callStatus === "idle") return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in">
+            <div className="flex flex-col items-center gap-6">
+                {/* 👤 Avatar with Pulsing Effect */}
+                <div className="relative">
+                    <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl animate-pulse"></div>
+                    <img src={otherUser?.photoURL} className="relative w-32 h-32 rounded-full border-4 border-black object-cover z-10" />
+                </div>
+
+                <h2 className="text-2xl font-bold text-white mt-4">{otherUser?.realName}</h2>
+                
+                <p className="text-blue-400 font-mono tracking-widest uppercase text-sm animate-pulse">
+                    {callStatus === "calling" && "Calling..."}
+                    {callStatus === "incoming" && "Incoming Call..."}
+                    {callStatus === "connected" && "Connected 00:00"}
+                </p>
+
+                {/* 🔘 BUTTONS */}
+                <div className="flex gap-8 mt-8">
+                    {callStatus === "incoming" && (
+                        <button onClick={onAnswer} className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition animate-bounce">
+                            📞
+                        </button>
+                    )}
+                    
+                    <button onClick={callStatus === "incoming" ? onReject : onEnd} 
+                        className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-white">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 3.75L18 6m0 0l2.25 2.25M18 6l2.25-2.25M18 6l-2.25 2.25m-10.5-2.394l-.375.375-1.5-1.5.375-.375m4.875 13.5l.375.375 1.5-1.5-.375-.375m-6.375-3.375l-.375.375-1.5-1.5.375-.375m17.505-5.32c.507.094 1.01.216 1.503.364M3.75 20.25h16.5" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
+// ... (Keep MessageStatus & TypingIndicator helpers here) ...
 const MessageStatus = ({ status, isMyMessage }) => {
   if (!isMyMessage) return null;
   if (status === "sent") return <span className="text-white/40 text-[10px] ml-1">✓</span>;
@@ -51,15 +77,23 @@ function PersonalChat({ userData, socket }) {
   const [messageList, setMessageList] = useState([]);
   const [typingUser, setTypingUser] = useState("");
   const [otherUser, setOtherUser] = useState(null); 
-  const [showProfile, setShowProfile] = useState(false);
-  const [showEmoji, setShowEmoji] = useState(false); // 😃 STATE FOR EMOJI
+  const [showEmoji, setShowEmoji] = useState(false);
+  
+  // 📞 CALL STATES
+  const [callStatus, setCallStatus] = useState("idle"); // idle, calling, incoming, connected
+  const [stream, setStream] = useState(null);
+  const [callerSignal, setCallerSignal] = useState(null);
   
   const notificationAudio = useRef(new Audio(NOTIFICATION_SOUND));
+  const ringtoneAudio = useRef(new Audio(RINGTONE_SOUND));
+  const myAudio = useRef();
+  const userAudio = useRef();
+  const connectionRef = useRef();
   const bottomRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // 1. SETUP
+  // 1. SETUP & LISTENERS
   useEffect(() => {
     if (userData && roomId) {
        socket.emit("join_room", { room: roomId, username: userData.realName });
@@ -74,11 +108,9 @@ function PersonalChat({ userData, socket }) {
        const unsubscribe = onSnapshot(q, (snapshot) => {
            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
            setMessageList(msgs);
-           
            if (msgs.length > 0) {
                const lastMsg = msgs[msgs.length - 1];
                const isMyMessage = lastMsg.uid ? (lastMsg.uid === userData.uid) : (lastMsg.author === userData.realName);
-               
                if (!isMyMessage) {
                    updateDoc(doc(db, "userChats", userData.uid), { [`${roomId}.unread`]: false }).catch(()=>{});
                    notificationAudio.current.play().catch(()=>{}); 
@@ -86,74 +118,104 @@ function PersonalChat({ userData, socket }) {
            }
        });
 
-       return () => unsubscribe();
+       // 📞 SOCKET CALL LISTENERS
+       socket.on("callUser", (data) => {
+           setCallStatus("incoming");
+           setCallerSignal(data.signal);
+           ringtoneAudio.current.loop = true;
+           ringtoneAudio.current.play();
+       });
+
+       socket.on("callAccepted", (signal) => {
+           setCallStatus("connected");
+           connectionRef.current.signal(signal);
+       });
+
+       socket.on("callEnded", () => {
+           leaveCall();
+       });
+
+       return () => { 
+           unsubscribe(); 
+           socket.off("callUser"); 
+           socket.off("callAccepted");
+           socket.off("callEnded");
+       };
     }
   }, [roomId, userData]);
 
-  // 2. TYPING LISTENERS
-  useEffect(() => {
-    socket.on("display_typing", (user) => setTypingUser(user));
-    socket.on("hide_typing", () => setTypingUser(""));
-    return () => { socket.off("display_typing"); socket.off("hide_typing"); };
-  }, [socket]);
+  // 2. CALL FUNCTIONS
+  const callUser = () => {
+      setCallStatus("calling");
+      navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then((currentStream) => {
+          setStream(currentStream);
+          const peer = new Peer({ initiator: true, trickle: false, stream: currentStream });
 
-  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), [messageList, typingUser]);
+          peer.on("signal", (data) => {
+              socket.emit("callUser", { userToCall: roomId, signalData: data, from: userData.uid, name: userData.realName });
+          });
 
-  // 📸 HANDLE IMAGE SELECTION
+          peer.on("stream", (currentStream) => { userAudio.current.srcObject = currentStream; });
+          socket.on("callAccepted", (signal) => { setCallStatus("connected"); peer.signal(signal); });
+          
+          connectionRef.current = peer;
+      });
+  };
+
+  const answerCall = () => {
+      setCallStatus("connected");
+      ringtoneAudio.current.pause();
+      
+      navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then((currentStream) => {
+          setStream(currentStream);
+          const peer = new Peer({ initiator: false, trickle: false, stream: currentStream });
+          
+          peer.on("signal", (data) => {
+              socket.emit("answerCall", { signal: data, to: roomId });
+          });
+          
+          peer.on("stream", (currentStream) => { userAudio.current.srcObject = currentStream; });
+          
+          peer.signal(callerSignal);
+          connectionRef.current = peer;
+      });
+  };
+
+  const leaveCall = () => {
+      setCallStatus("idle");
+      ringtoneAudio.current.pause();
+      if (connectionRef.current) connectionRef.current.destroy();
+      if (stream) stream.getTracks().forEach(track => track.stop()); // Stop Mic
+      socket.emit("endCall", { to: roomId });
+      window.location.reload(); // Quick fix to clear audio streams
+  };
+
+  // ... (Keep existing sendMessage, handleTyping, handleFileSelect) ...
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    if (file.size > 500 * 1024) {
-        alert("Image too large! Please send images under 500KB.");
-        return;
-    }
-
+    if (file.size > 500 * 1024) { alert("Image too large! Please send images under 500KB."); return; }
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = async () => {
-        await sendMessage(reader.result, "image"); 
-    };
+    reader.onload = async () => { await sendMessage(reader.result, "image"); };
   };
 
   const sendMessage = async (content = currentMessage, type = "text") => {
     if (type === "text" && content.trim() === "") return;
-    
     const messageData = {
-        room: roomId,
-        author: userData.realName,
-        uid: userData.uid, 
-        photo: userData.photoURL,
-        message: type === "text" ? content : "📷 Image", 
-        image: type === "image" ? content : null,        
-        type: type,                                      
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        fullDate: new Date().toISOString(),
-        createdAt: serverTimestamp(),
-        status: "sent"
+        room: roomId, author: userData.realName, uid: userData.uid, photo: userData.photoURL,
+        message: type === "text" ? content : "📷 Image", image: type === "image" ? content : null, type: type,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), fullDate: new Date().toISOString(),
+        createdAt: serverTimestamp(), status: "sent"
     };
-
     await addDoc(collection(db, "chats", roomId, "messages"), messageData);
-    
     const ids = roomId.split("_");
     const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
-    
-    const chatUpdate = { 
-        lastMessage: type === "text" ? content : "📷 Image", 
-        date: serverTimestamp() 
-    };
-
-    const myChatRef = doc(db, "userChats", userData.uid);
-    setDoc(myChatRef, { [roomId]: { userInfo: { uid: otherUid }, unread: false, ...chatUpdate }}, { merge: true });
-
-    const theirChatRef = doc(db, "userChats", otherUid);
-    setDoc(theirChatRef, { [roomId]: { 
-        userInfo: { uid: userData.uid, displayName: userData.realName, photoURL: userData.photoURL }, 
-        unread: true, ...chatUpdate 
-    }}, { merge: true });
-
+    const chatUpdate = { lastMessage: type === "text" ? content : "📷 Image", date: serverTimestamp() };
+    setDoc(doc(db, "userChats", userData.uid), { [roomId]: { userInfo: { uid: otherUid }, unread: false, ...chatUpdate }}, { merge: true });
+    setDoc(doc(db, "userChats", otherUid), { [roomId]: { userInfo: { uid: userData.uid, displayName: userData.realName, photoURL: userData.photoURL }, unread: true, ...chatUpdate }}, { merge: true });
     if (type === "text") setCurrentMessage("");
-    setShowEmoji(false); // Hide emoji picker after sending
+    setShowEmoji(false);
     socket.emit("stop_typing", roomId);
   };
 
@@ -163,17 +225,26 @@ function PersonalChat({ userData, socket }) {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => socket.emit("stop_typing", roomId), 2000);
   };
+  
+  // Listeners for typing
+  useEffect(() => {
+    socket.on("display_typing", (user) => setTypingUser(user));
+    socket.on("hide_typing", () => setTypingUser(""));
+    return () => { socket.off("display_typing"); socket.off("hide_typing"); };
+  }, [socket]);
+  
+  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), [messageList, typingUser]);
 
   if (!userData) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
   return (
     <div className="fixed inset-0 bg-[#0b0f19] flex flex-col font-sans">
         
-        {/* HEADER */}
+        {/* HEADER - Added Call Button */}
         <div className="h-14 md:h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 z-30 shrink-0">
             <div className="flex items-center gap-3">
                 <button onClick={() => navigate("/")} className="text-gray-300 text-xl p-2 hover:bg-white/5 rounded-full">←</button>
-                <div className="flex items-center gap-3 cursor-pointer" onClick={() => setShowProfile(true)}>
+                <div className="flex items-center gap-3">
                     <img src={otherUser?.photoURL} className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border border-white/10" />
                     <div>
                         <h2 className="font-bold text-white text-sm md:text-lg">{otherUser?.realName || "User"}</h2>
@@ -181,7 +252,13 @@ function PersonalChat({ userData, socket }) {
                     </div>
                 </div>
             </div>
-            <button onClick={() => navigate("/")} className="text-[10px] md:text-xs px-3 py-2 rounded-lg bg-blue-900/20 text-blue-300 border border-blue-500/20">Dashboard</button>
+            
+            {/* 📞 CALL BUTTON */}
+            <button onClick={callUser} className="p-3 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                </svg>
+            </button>
         </div>
 
         {/* MESSAGES */}
@@ -210,49 +287,25 @@ function PersonalChat({ userData, socket }) {
 
         {/* INPUT */}
         <div className="fixed bottom-0 left-0 w-full bg-[#0b0f19] border-t border-white/10 p-3 flex gap-2 z-40 pb-safe">
-            
-            {/* 😃 EMOJI POPUP */}
-            {showEmoji && (
-                <div className="absolute bottom-20 left-4 z-50 animate-fade-in-up shadow-2xl rounded-2xl overflow-hidden">
-                    <EmojiPicker 
-                        onEmojiClick={(e) => setCurrentMessage(prev => prev + e.emoji)} 
-                        theme="dark" 
-                        height={350} 
-                        searchDisabled 
-                        skinTonesDisabled
-                    />
-                </div>
-            )}
-
-            {/* 📸 HIDDEN FILE INPUT */}
+            {showEmoji && <div className="absolute bottom-20 left-4 z-50 animate-fade-in-up shadow-2xl rounded-2xl overflow-hidden"><EmojiPicker onEmojiClick={(e)=>setCurrentMessage(prev=>prev+e.emoji)} theme="dark" height={350}/></div>}
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
-            
-            {/* 📎 ATTACHMENT BUTTON */}
-            <button onClick={() => fileInputRef.current.click()} className="text-gray-400 hover:text-white p-3 rounded-full hover:bg-white/5 transition">
-                📎
-            </button>
-
-            {/* 😃 EMOJI BUTTON */}
-            <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-yellow-400 p-3 rounded-full hover:bg-white/5 transition">
-                😊
-            </button>
-
+            <button onClick={() => fileInputRef.current.click()} className="text-gray-400 hover:text-white p-3 rounded-full hover:bg-white/5 transition">📎</button>
+            <button onClick={() => setShowEmoji(!showEmoji)} className="text-gray-400 hover:text-yellow-400 p-3 rounded-full hover:bg-white/5 transition">😊</button>
             <input className="flex-1 bg-white/5 text-white p-3 rounded-full outline-none text-sm border border-white/5 focus:border-blue-500/50 transition-all placeholder-gray-500" 
-                placeholder="Type a message..." value={currentMessage} onChange={handleTyping} onClick={() => setShowEmoji(false)}
-                onKeyPress={(e) => e.key === "Enter" && sendMessage()} />
-            
-            <button onClick={() => sendMessage()} className="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform hover:bg-blue-500">
-                <span className="-ml-0.5 text-lg">➤</span>
-            </button>
+                placeholder="Type a message..." value={currentMessage} onChange={handleTyping} onClick={() => setShowEmoji(false)} onKeyPress={(e) => e.key === "Enter" && sendMessage()} />
+            <button onClick={() => sendMessage()} className="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform hover:bg-blue-500"><span className="-ml-0.5 text-lg">➤</span></button>
         </div>
 
-        {showProfile && <ProfileModal user={otherUser} onClose={() => setShowProfile(false)} />}
+        {/* 📞 CALL MODAL */}
+        <CallModal callStatus={callStatus} otherUser={otherUser} onAnswer={answerCall} onReject={leaveCall} onEnd={leaveCall} />
+        
+        {/* 🔈 HIDDEN AUDIO ELEMENTS */}
+        <audio ref={myAudio} muted />
+        <audio ref={userAudio} autoPlay />
 
         <style>{`
             .pb-safe { padding-bottom: env(safe-area-inset-bottom); } 
             body { background-color: #0b0f19; }
-            .animate-fade-in-up { animation: fadeInUp 0.3s ease-out; }
-            @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         `}</style>
     </div>
   );
