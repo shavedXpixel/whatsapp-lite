@@ -21,23 +21,24 @@ function About() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0f172a] font-sans relative overflow-hidden flex flex-col items-center py-10 px-4">
+    // ✅ FIX: h-full + overflow-y-auto allows scrolling inside the locked App container
+    <div className="h-full w-full bg-[#0f172a] font-sans relative overflow-y-auto overflow-x-hidden flex flex-col items-center py-10 px-4 custom-scrollbar">
       
-      {/* 🎬 BACKGROUND EFFECTS */}
+      {/* 🎬 BACKGROUND EFFECTS (Fixed so they don't scroll) */}
       <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 z-0 pointer-events-none"></div>
       <div className="fixed top-[-10%] left-[-10%] w-96 h-96 bg-purple-600/30 rounded-full blur-[128px] pointer-events-none"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-500/30 rounded-full blur-[128px] pointer-events-none"></div>
 
       {/* 🔙 BACK BUTTON */}
-      <button onClick={() => navigate("/")} className="absolute top-6 left-6 z-50 flex items-center gap-2 text-gray-400 hover:text-white transition group">
+      <button onClick={() => navigate("/")} className="absolute top-6 left-6 z-50 flex items-center gap-2 text-gray-400 hover:text-white transition group bg-black/20 p-2 rounded-lg backdrop-blur-sm border border-white/5">
         <span className="group-hover:-translate-x-1 transition-transform">←</span> Back
       </button>
 
       {/* 📦 CONTENT CONTAINER */}
-      <div className="relative z-10 w-full max-w-4xl space-y-12 animate-grand-reveal">
+      <div className="relative z-10 w-full max-w-4xl space-y-12 animate-grand-reveal pb-20">
         
         {/* 👨‍💻 DEVELOPER CARD */}
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 mt-10">
             <div className="relative inline-block group">
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-cyan-500 rounded-full blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
                 <img src="https://api.dicebear.com/9.x/micah/svg?seed=Priyansu" alt="Dev" 
@@ -84,6 +85,13 @@ function About() {
         </div>
 
       </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+      `}</style>
     </div>
   );
 }
