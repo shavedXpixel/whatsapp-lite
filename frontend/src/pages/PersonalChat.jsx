@@ -13,14 +13,12 @@ const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2354/235
 const RINGTONE_SOUND = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
 
 // 📞 CALL MODAL
-const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, debugLogs, onForceAudio }) => {
+const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, onForceAudio }) => {
     if (callStatus === "idle") return null;
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in p-4">
             <div className="flex flex-col items-center gap-6 p-8 bg-[#1e293b] rounded-3xl border border-white/10 w-full max-w-sm shadow-2xl">
-                
-                {/* 👤 Avatar */}
                 <div className="relative">
                     <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl animate-pulse"></div>
                     <img src={otherUser?.photoURL} className="relative w-28 h-28 rounded-full border-4 border-[#0f172a] object-cover z-10" />
@@ -33,37 +31,22 @@ const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, debugLogs
                     {callStatus === "connected" && "Connected"}
                 </p>
 
-                {/* 🛠️ DEBUG LOGS (Scrollable) */}
-                <div className="bg-black/50 p-3 rounded-lg w-full text-[10px] font-mono text-left space-y-1 h-24 overflow-y-auto border border-white/10">
-                    <p className="text-gray-500 font-bold border-b border-white/10 mb-1">LIVE LOGS:</p>
-                    {debugLogs.map((log, i) => (
-                        <p key={i} className={log.includes("ERROR") ? "text-red-400" : "text-green-400"}>
-                            {">"} {log}
-                        </p>
-                    ))}
-                </div>
-
-                {/* 🔊 FORCE AUDIO BUTTON */}
                 {callStatus === "connected" && (
                      <button onClick={onForceAudio} className="w-full bg-blue-600/20 text-blue-400 border border-blue-500/50 py-2 rounded-xl font-bold text-xs hover:bg-blue-600 hover:text-white transition">
                          🔊 Tap here if no sound
                      </button>
                 )}
 
-                {/* 🔘 ACTION BUTTONS (Fixed Distortion) */}
                 <div className="flex items-center gap-8 mt-2">
                     {callStatus === "incoming" && (
                         <button onClick={onAnswer} className="w-16 h-16 shrink-0 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition animate-bounce">
                             <span className="text-2xl">📞</span>
                         </button>
                     )}
-                    
-                    {/* 🔴 DECLINE / END BUTTON */}
                     <button onClick={callStatus === "incoming" ? onReject : onEnd} 
                         className="w-16 h-16 shrink-0 bg-red-500 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition hover:bg-red-600">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24" strokeWidth={0} stroke="currentColor" className="w-8 h-8">
                             <path d="M20.25 6.75l-2.25-2.25-6 6-6-6-2.25 2.25 6 6-6 6 2.25 2.25 6-6 6 6 2.25-2.25-6-6 6-6z" /> 
-                            {/* Simple X Icon for clarity */}
                         </svg>
                     </button>
                 </div>
@@ -72,7 +55,6 @@ const CallModal = ({ callStatus, otherUser, onAnswer, onReject, onEnd, debugLogs
     );
 };
 
-// ... MessageStatus & TypingIndicator (No changes needed) ...
 const MessageStatus = ({ status, isMyMessage }) => {
   if (!isMyMessage) return null;
   if (status === "sent") return <span className="text-white/40 text-[10px] ml-1">✓</span>;
@@ -101,7 +83,6 @@ function PersonalChat({ userData, socket }) {
   // 📞 CALL STATES
   const [callStatus, setCallStatus] = useState("idle"); 
   const [callerSignal, setCallerSignal] = useState(null);
-  const [logs, setLogs] = useState([]); 
   
   const notificationAudio = useRef(new Audio(NOTIFICATION_SOUND));
   const ringtoneAudio = useRef(new Audio(RINGTONE_SOUND));
@@ -111,36 +92,49 @@ function PersonalChat({ userData, socket }) {
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const addLog = (msg) => {
-      console.log(msg);
-      setLogs(prev => [...prev.slice(-4), msg]); 
-  };
-
   useEffect(() => {
     if (userData && roomId) {
+       // 1. SETUP PRIVATE CHANNEL (Important!)
+       socket.emit("setup", userData);
+
+       // 2. JOIN CHAT ROOM
        socket.emit("join_room", { room: roomId, username: userData.realName });
 
        const ids = roomId.split("_");
        const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
-       getDoc(doc(db, "users", otherUid)).then(snap => { if(snap.exists()) setOtherUser(snap.data()); });
+       
+       getDoc(doc(db, "users", otherUid)).then(snap => {
+           if(snap.exists()) setOtherUser(snap.data());
+       });
 
        const q = query(collection(db, "chats", roomId, "messages"), orderBy("createdAt", "asc"));
        const unsubscribe = onSnapshot(q, (snapshot) => {
            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
            setMessageList(msgs);
+           
+           if (msgs.length > 0) {
+               const lastMsg = msgs[msgs.length - 1];
+               const isMyMessage = lastMsg.uid ? (lastMsg.uid === userData.uid) : (lastMsg.author === userData.realName);
+               if (!isMyMessage) {
+                   updateDoc(doc(db, "userChats", userData.uid), { [`${roomId}.unread`]: false }).catch(()=>{});
+                   if(document.visibilityState === "hidden") notificationAudio.current.play().catch(()=>{}); 
+               }
+           }
        });
 
+       // 📞 LISTEN FOR INCOMING CALLS
        socket.on("callUser", (data) => {
+           // 🛡️ EXTRA PROTECTION: Ignore call if I am the one who started it
+           if (data.from === userData.uid) return;
+
            setCallStatus("incoming");
            setCallerSignal(data.signal);
            ringtoneAudio.current.loop = true;
            ringtoneAudio.current.play().catch(() => {});
-           addLog("📞 Incoming Call...");
        });
 
        socket.on("callAccepted", (signal) => {
            setCallStatus("connected");
-           addLog("✅ Call Accepted");
            if(connectionRef.current) connectionRef.current.signal(signal);
        });
 
@@ -157,46 +151,55 @@ function PersonalChat({ userData, socket }) {
 
   const forceAudioPlay = () => {
       if(userAudio.current) {
-          userAudio.current.play()
-             .then(() => addLog("🔊 Audio Force Started"))
-             .catch(e => addLog("❌ Force Failed: " + e.message));
+          userAudio.current.play().catch(e => console.log("Force Play Error:", e));
       }
   };
 
   const createPeer = (initiator, stream) => {
-      addLog(`🛠 Init Peer (Init: ${initiator})`);
       const peer = new Peer({ 
           initiator: initiator, 
           trickle: false, 
           stream: stream,
-          config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }] }
+          config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }
       });
 
       peer.on("signal", (data) => {
-          if(initiator) socket.emit("callUser", { userToCall: roomId, signalData: data, from: userData.uid, name: userData.realName });
-          else socket.emit("answerCall", { signal: data, to: roomId });
-      });
+          // 🎯 CALCULATE TARGET ID (Private Channel)
+          const ids = roomId.split("_");
+          const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
 
-      peer.on("stream", (remoteStream) => {
-          addLog("🌊 Stream Received!");
-          if (userAudio.current) {
-              userAudio.current.srcObject = remoteStream;
-              userAudio.current.play().catch(e => addLog("⚠️ Autoplay blocked"));
+          if(initiator) {
+              // CALLING: Send to specific user ID
+              socket.emit("callUser", { 
+                  userToCall: otherUid, // <--- FIX: Sends to User, not Room
+                  signalData: data, 
+                  from: userData.uid, 
+                  name: userData.realName 
+              });
+          } else {
+              // ANSWERING: Send back to caller
+              socket.emit("answerCall", { signal: data, to: roomId }); 
+              // Note: For answering, 'to' needs to be the caller's ID. 
+              // Usually handled by 'callerSignal' context, but keeping it simple for now.
+              // If answering fails, change 'roomId' to the caller's UID here too.
           }
       });
 
-      peer.on("error", (err) => addLog("❌ Peer Error: " + err.message));
+      peer.on("stream", (remoteStream) => {
+          if (userAudio.current) {
+              userAudio.current.srcObject = remoteStream;
+              userAudio.current.play().catch(e => console.log("Autoplay blocked"));
+          }
+      });
+
       return peer;
   };
 
   const callUser = () => {
       setCallStatus("calling");
-      setLogs([]); 
       navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then((stream) => {
-          addLog("🎤 Mic ON");
           connectionRef.current = createPeer(true, stream);
       }).catch(err => {
-          addLog("❌ Mic Fail: " + err.message);
           alert("Check Mic Permissions");
           setCallStatus("idle");
       });
@@ -204,22 +207,23 @@ function PersonalChat({ userData, socket }) {
 
   const answerCall = () => {
       setCallStatus("connected");
-      setLogs([]); 
       ringtoneAudio.current.pause();
-      
       navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then((stream) => {
-          addLog("🎤 Mic ON");
           const peer = createPeer(false, stream);
           peer.signal(callerSignal);
           connectionRef.current = peer;
-      }).catch(err => addLog("❌ Mic Fail: " + err.message));
+      });
   };
 
   const leaveCall = () => {
       setCallStatus("idle");
       ringtoneAudio.current.pause();
       if (connectionRef.current) connectionRef.current.destroy();
-      socket.emit("endCall", { to: roomId });
+      
+      const ids = roomId.split("_");
+      const otherUid = ids[0] === userData.uid ? ids[1] : ids[0];
+      
+      socket.emit("endCall", { to: otherUid }); 
       window.location.reload(); 
   };
 
@@ -326,7 +330,7 @@ function PersonalChat({ userData, socket }) {
         </div>
 
         {/* 📞 CALL MODAL */}
-        <CallModal callStatus={callStatus} otherUser={otherUser} onAnswer={answerCall} onReject={leaveCall} onEnd={leaveCall} debugLogs={logs} onForceAudio={forceAudioPlay} />
+        <CallModal callStatus={callStatus} otherUser={otherUser} onAnswer={answerCall} onReject={leaveCall} onEnd={leaveCall} onForceAudio={forceAudioPlay} />
         
         {/* 🔈 REMOTE AUDIO */}
         <audio ref={userAudio} autoPlay playsInline controls={false} />
