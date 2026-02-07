@@ -18,7 +18,9 @@ const io = new Server(server, {
     origin: [
       "http://localhost:5173",              // Localhost
       "https://whatsapp-lite.vercel.app",   // Vercel (No slash)
-      "https://whatsapp-lite.vercel.app/"   // Vercel (With slash)
+      "https://whatsapp-lite.vercel.app/",
+      "https://wp-lite.netlify.app",
+      "https://wp-lite.netlify.app/"   
     ],
     methods: ["GET", "POST"],
   },
