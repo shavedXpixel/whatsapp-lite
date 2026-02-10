@@ -112,11 +112,24 @@ function Home({ userData, socket }) {
     }
   };
 
+  // ✅ FIXED: UPDATED DESKTOP SEARCH FUNCTION
   const handleDesktopSearch = async () => {
-    if(!searchUsername) return;
-    const q = query(collection(db, "users"), where("username", "==", searchUsername.toLowerCase()));
+    // 1. Trim spaces to avoid errors
+    const term = searchUsername.trim().toLowerCase();
+    if(!term) return;
+
+    // 2. Clear previous result so UI updates
+    setSearchResult(null);
+
+    const q = query(collection(db, "users"), where("username", "==", term));
     const snap = await getDocs(q);
-    if(!snap.empty) setSearchResult(snap.docs[0].data());
+
+    if(!snap.empty) {
+        setSearchResult(snap.docs[0].data());
+    } else {
+        // 3. Show Alert if not found
+        alert("User not found! Please check the username (it must be exact).");
+    }
   };
 
   const openRecentChat = async (chat) => {
