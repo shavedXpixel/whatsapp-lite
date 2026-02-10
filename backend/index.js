@@ -17,8 +17,8 @@ const io = new Server(server, {
   cors: {
     origin: [
       "http://localhost:5173",              // Localhost
-      "https://whatsapp-lite.vercel.app",
-      "https://whatsapp-lite.vercel.app/"   
+      "https://whatsapp-lite-personal.vercel.app",
+      "https://whatsapp-lite-personal.vercel.app/"   
     ],
     methods: ["GET", "POST"],
   },
