@@ -5,7 +5,7 @@
 A real-time chat app with a premium glassmorphism design, built with **React** and **Firebase**.
 
 ### 🌐 Live Demo
-[**Click here to view the live app**](https://wp-lite.netlify.app/)
+[**Click here to view the live app**](https://whatsapp-lite-personal.vercel.app/)
 
 ### ✨ Features
 * **Live Messaging:** Instant 1-on-1 and Group chats.
