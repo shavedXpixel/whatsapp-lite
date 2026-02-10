@@ -17,8 +17,8 @@ const io = new Server(server, {
   cors: {
     origin: [
       "http://localhost:5173",              // Localhost
-      "https://wp-lite.netlify.app",
-      "https://wp-lite.netlify.app/"   
+      "https://whatsapp-lite.vercel.app",
+      "https://whatsapp-lite.vercel.app/"   
     ],
     methods: ["GET", "POST"],
   },
